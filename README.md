@@ -41,3 +41,13 @@ In development the sign-in code is printed to the server log, not emailed.
 ## Secrets
 
 Never commit `.env`. The Loop API token and session secret live only in the server's environment.
+
+## App: what's built
+
+- `app/src/app/sign-in.tsx`: email, then a 6-digit code.
+- `app/src/app/locked.tsx`: shown when the email has no active subscription.
+- `app/src/app/index.tsx`: placeholder home for members.
+- `app/src/session.tsx`: keeps the sign-in on the phone (secure storage) and re-checks the subscription on launch.
+
+Run it: `cd app && cp .env.example .env && npm install && npx expo start`.
+Checks: `npm run typecheck`. Not yet run on a real phone.

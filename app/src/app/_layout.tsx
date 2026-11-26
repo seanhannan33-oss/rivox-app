@@ -1,0 +1,52 @@
+import { DMSans_400Regular, DMSans_500Medium, DMSans_700Bold } from "@expo-google-fonts/dm-sans";
+import { LilitaOne_400Regular } from "@expo-google-fonts/lilita-one";
+import { useFonts } from "expo-font";
+import { Stack } from "expo-router";
+import * as SplashScreen from "expo-splash-screen";
+import { StatusBar } from "expo-status-bar";
+import { useEffect } from "react";
+import { SafeAreaProvider } from "react-native-safe-area-context";
+import { SessionProvider, useSession } from "../session";
+import { colors } from "../theme";
+
+SplashScreen.preventAutoHideAsync().catch(() => {});
+
+function Routes({ fontsReady }: { fontsReady: boolean }) {
+  const { status } = useSession();
+  const ready = fontsReady && status !== "loading";
+
+  useEffect(() => {
+    if (ready) SplashScreen.hideAsync().catch(() => {});
+  }, [ready]);
+
+  if (!ready) return null;
+
+  // Each screen exists only for the state it belongs to, so nobody can
+  // deep-link past the door.
+  return (
+    <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: colors.bg } }}>
+      <Stack.Protected guard={status === "member"}>
+        <Stack.Screen name="index" />
+      </Stack.Protected>
+      <Stack.Protected guard={status === "locked"}>
+        <Stack.Screen name="locked" />
+      </Stack.Protected>
+      <Stack.Protected guard={status === "signedOut"}>
+        <Stack.Screen name="sign-in" />
+      </Stack.Protected>
+    </Stack>
+  );
+}
+
+export default function RootLayout() {
+  const [loaded, error] = useFonts({ LilitaOne_400Regular, DMSans_400Regular, DMSans_500Medium, DMSans_700Bold });
+  return (
+    <SafeAreaProvider>
+      <SessionProvider>
+        <StatusBar style="light" />
+        {/* If fonts fail we still open the app on system fonts. */}
+        <Routes fontsReady={loaded || error != null} />
+      </SessionProvider>
+    </SafeAreaProvider>
+  );
+}
