@@ -34,6 +34,14 @@
           "image": "./assets/brand/app-icon.png",
           "imageWidth": 160
         }
+      ],
+      [
+        "expo-image-picker",
+        {
+          "cameraPermission": "Rivox uses the camera so you can photograph a meal and get a protein estimate.",
+          "photosPermission": "Rivox lets you pick a meal photo to get a protein estimate.",
+          "microphonePermission": false
+        }
       ]
     ],
     "experiments": {

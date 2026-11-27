@@ -21,12 +21,15 @@ export interface Store {
   getDrop(id: string): Promise<Drop | undefined>;
   putDrop(drop: Drop): Promise<void>;
   deleteDrop(id: string): Promise<void>;
+  /** Adds one to a member's counter for a day and returns the new total. Used to cap paid features. */
+  bumpUsage(email: string, kind: string, day: string): Promise<number>;
 }
 
 export class MemoryStore implements Store {
   private codes = new Map<string, StoredCode>();
   private members = new Map<string, Member>();
   private drops = new Map<string, Drop>();
+  private usage = new Map<string, number>();
 
   async getCode(email: string) {
     return this.codes.get(email);
@@ -54,5 +57,11 @@ export class MemoryStore implements Store {
   }
   async deleteDrop(id: string) {
     this.drops.delete(id);
+  }
+  async bumpUsage(email: string, kind: string, day: string) {
+    const key = `${email}|${kind}|${day}`;
+    const n = (this.usage.get(key) ?? 0) + 1;
+    this.usage.set(key, n);
+    return n;
   }
 }

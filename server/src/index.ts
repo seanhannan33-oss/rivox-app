@@ -5,6 +5,7 @@ import { ConsoleEmailSender, ResendEmailSender, type EmailSender } from "./email
 import { HttpLoopClient } from "./loop.ts";
 import { PostgresStore, createPool } from "./pg-store.ts";
 import { MemoryStore, type Store } from "./store.ts";
+import { AnthropicMealEstimator, type MealEstimator } from "./vision.ts";
 
 const config = loadConfig();
 
@@ -32,7 +33,15 @@ if (config.emailProvider === "resend") {
   throw new Error(`EMAIL_PROVIDER "${config.emailProvider}" is not supported. Use "resend" or "console".`);
 }
 
-const app = createApp({ config, store, loop: new HttpLoopClient(config.loop), email });
+let meals: MealEstimator | undefined;
+if (config.anthropicApiKey) {
+  meals = new AnthropicMealEstimator(config.anthropicApiKey, config.visionModel);
+  console.log(`Meal photos: on (${config.visionModel}, ${config.photoDailyLimit} a day per member).`);
+} else {
+  console.warn("Meal photos: off. Set ANTHROPIC_API_KEY to switch them on.");
+}
+
+const app = createApp({ config, store, loop: new HttpLoopClient(config.loop), email, meals });
 
 serve({ fetch: app.fetch, port: config.port }, (info) => {
   console.log(`Rivox app server listening on port ${info.port}`);

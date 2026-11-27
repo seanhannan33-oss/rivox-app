@@ -19,6 +19,11 @@ export interface Config {
   adminToken: string;
   /** Hosts a drop's button may link to. */
   linkHosts: string[];
+  /** Key for the meal photo feature. Empty means photos are switched off. */
+  anthropicApiKey: string;
+  visionModel: string;
+  /** Meal photos one member can send per day. */
+  photoDailyLimit: number;
 }
 
 function list(value: string | undefined): string[] {
@@ -58,5 +63,8 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
     databaseUrl: env.DATABASE_URL ?? "",
     adminToken: adminToken(env.ADMIN_TOKEN),
     linkHosts: list(env.DROP_LINK_HOSTS ?? "rivoxlabs.com").map((h) => h.toLowerCase()),
+    anthropicApiKey: (env.ANTHROPIC_API_KEY ?? "").trim(),
+    visionModel: (env.VISION_MODEL ?? "claude-haiku-5-5").trim(),
+    photoDailyLimit: Math.max(1, Number(env.PHOTO_DAILY_LIMIT ?? 12) || 12),
   };
 }

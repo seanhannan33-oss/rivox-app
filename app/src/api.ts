@@ -77,6 +77,23 @@ export function fetchDrops(token: string): Promise<{ drops: Drop[] }> {
   return call("/drops", { headers: { authorization: `Bearer ${token}` } });
 }
 
+export interface MealEstimate {
+  isFood: boolean;
+  label: string;
+  items: { name: string; proteinG: number }[];
+  proteinG: number;
+  confidence: "low" | "medium" | "high";
+}
+
+/** Sends one meal photo (base64 JPEG) for a protein estimate. The server does not keep the photo. */
+export function estimateMeal(token: string, imageBase64: string): Promise<{ estimate: MealEstimate; left: number }> {
+  return call("/fuel/estimate", {
+    method: "POST",
+    headers: { authorization: `Bearer ${token}` },
+    body: JSON.stringify({ image: imageBase64, mediaType: "image/jpeg" }),
+  });
+}
+
 /** Plain words for every error code the server can send back. */
 export function errorMessage(err: unknown): string {
   const code = err instanceof ApiError ? err.code : "unknown";
@@ -96,6 +113,15 @@ export function errorMessage(err: unknown): string {
       return "Can't check your subscription right now. Give it a minute.";
     case "email_unavailable":
       return "Couldn't send your code. Try again in a minute.";
+    case "photo_unavailable":
+      return "Photos aren't switched on yet. Tap a number instead.";
+    case "photo_limit":
+      return "That's enough photos for one day. Tap a number instead.";
+    case "photo_too_big":
+    case "invalid_photo":
+      return "That photo didn't go through. Try another.";
+    case "photo_failed":
+      return "Couldn't read that plate. Try again, or tap a number.";
     case "network":
       return "No connection. Find some bars and try again.";
     default:

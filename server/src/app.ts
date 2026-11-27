@@ -16,6 +16,7 @@ import type { EmailSender } from "./email.ts";
 import type { LoopClient } from "./loop.ts";
 import { createSession, readSession } from "./session.ts";
 import type { Store } from "./store.ts";
+import { MAX_IMAGE_BASE64, MEDIA_TYPES, type MealEstimator } from "./vision.ts";
 
 /** How long a Loop answer is trusted before /me asks again. Webhooks update it sooner. */
 export const ACCESS_FRESH_MS = 6 * 60 * 60 * 1000;
@@ -25,6 +26,8 @@ export interface Deps {
   store: Store;
   loop: LoopClient;
   email: EmailSender;
+  /** Missing when the meal photo feature is switched off. */
+  meals?: MealEstimator;
   now?: () => number;
 }
 
@@ -129,6 +132,39 @@ export function createApp(deps: Deps) {
     const member = await store.getMember(address);
     if (!member || !member.access.allowed) return c.json({ error: "members_only" }, 403);
     return c.json({ drops: dropsFor(await store.listDrops(), member.access, now()) });
+  });
+
+  // Meal photo -> protein estimate. Members only, capped per day because each one costs money.
+  app.post("/fuel/estimate", async (c) => {
+    const header = c.req.header("Authorization") ?? "";
+    const address = readSession(header.startsWith("Bearer ") ? header.slice(7) : undefined, config.sessionSecret, now());
+    if (!address) return c.json({ error: "unauthorized" }, 401);
+    const member = await store.getMember(address);
+    if (!member || !member.access.allowed) return c.json({ error: "members_only" }, 403);
+    if (!deps.meals) return c.json({ error: "photo_unavailable" }, 503);
+
+    if (Number(c.req.header("Content-Length") ?? 0) > MAX_IMAGE_BASE64 + 2000) {
+      return c.json({ error: "photo_too_big" }, 413);
+    }
+    const body = (await c.req.json().catch(() => null)) as { image?: unknown; mediaType?: unknown } | null;
+    const image = typeof body?.image === "string" ? body.image : "";
+    const mediaType = MEDIA_TYPES.find((m) => m === body?.mediaType);
+    if (!mediaType || image.length < 100 || !/^[A-Za-z0-9+/]+={0,2}$/.test(image)) {
+      return c.json({ error: "invalid_photo" }, 400);
+    }
+    if (image.length > MAX_IMAGE_BASE64) return c.json({ error: "photo_too_big" }, 413);
+
+    const day = new Date(now()).toISOString().slice(0, 10);
+    const used = await store.bumpUsage(address, "meal_photo", day);
+    if (used > config.photoDailyLimit) return c.json({ error: "photo_limit" }, 429);
+
+    try {
+      const estimate = await deps.meals.estimate(image, mediaType);
+      return c.json({ estimate, left: Math.max(0, config.photoDailyLimit - used) });
+    } catch (err) {
+      console.error("Meal estimate failed:", err);
+      return c.json({ error: "photo_failed" }, 502);
+    }
   });
 
   // Admin: post and remove drops. Off entirely unless ADMIN_TOKEN is set.

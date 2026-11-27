@@ -64,3 +64,9 @@ Checks: `npm run typecheck`. Not yet run on a real phone.
 - Post and remove them at `/admin` on the server. It needs `ADMIN_TOKEN` (32+ characters) set in the server settings; with no token the admin page does not exist.
 - A drop's button can only link to hosts in `DROP_LINK_HOSTS` (default `rivoxlabs.com`).
 - For a discount that applies itself, use a Shopify discount link: `https://rivoxlabs.com/discount/CODE?redirect=/path`. The admin page builds it from the code and the path.
+
+## Fuel
+
+- The protein target is 0.8 g per pound of body weight. Weight, target and the food log stay on the phone.
+- Meal photos go to `POST /fuel/estimate`, which asks a vision model for a protein estimate. The photo is not stored.
+- Set `ANTHROPIC_API_KEY` on the server to switch photos on. `PHOTO_DAILY_LIMIT` caps photos per member per day (default 12).

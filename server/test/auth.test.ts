@@ -5,6 +5,7 @@ import { ACCESS_FRESH_MS, createApp } from "../src/app.ts";
 import { CODE_TTL_MS, MAX_ATTEMPTS } from "../src/codes.ts";
 import type { Config } from "../src/config.ts";
 import { MemoryStore } from "../src/store.ts";
+import type { MealEstimator } from "../src/vision.ts";
 
 const config: Config = {
   port: 0,
@@ -25,15 +26,19 @@ const config: Config = {
   databaseUrl: "",
   adminToken: "admin-token-admin-token-admin-token-1",
   linkHosts: ["rivoxlabs.com"],
+  anthropicApiKey: "",
+  visionModel: "test-model",
+  photoDailyLimit: 2,
 };
 
-function setup(subsByEmail: Record<string, Subscription[]> = {}) {
+function setup(subsByEmail: Record<string, Subscription[]> = {}, meals?: MealEstimator) {
   const sent: { to: string; code: string }[] = [];
   const clock = { t: 1_800_000_000_000 };
   const loopState = { subs: subsByEmail, fail: false, calls: 0 };
   const app = createApp({
     config,
     store: new MemoryStore(),
+    meals,
     now: () => clock.t,
     email: { sendCode: async (to, code) => void sent.push({ to, code }) },
     loop: {
@@ -278,4 +283,66 @@ test("scheduled and expired drops stay hidden from members", async () => {
   assert.equal(await count(), 1);
   clock.t += 3_600_000;
   assert.equal(await count(), 0);
+});
+
+// ---- Meal photos ----
+
+const PHOTO = "A".repeat(400);
+const fakeMeals = (calls: { n: number }, fail = false): MealEstimator => ({
+  estimate: async () => {
+    calls.n++;
+    if (fail) throw new Error("model down");
+    return { isFood: true, label: "4 eggs, toast", items: [{ name: "eggs", proteinG: 24 }], proteinG: 31, confidence: "medium" };
+  },
+});
+
+test("a member gets a protein estimate from a photo, up to the daily limit", async () => {
+  const calls = { n: 0 };
+  const { post, signIn, clock } = setup({ "nc@example.com": [active("111")] }, fakeMeals(calls));
+  const { body } = await signIn("nc@example.com");
+  const send = () => post("/fuel/estimate", { image: PHOTO, mediaType: "image/jpeg" }, { Authorization: `Bearer ${body.token}` });
+
+  const first = await send();
+  assert.equal(first.status, 200);
+  const data = (await first.json()) as any;
+  assert.equal(data.estimate.proteinG, 31);
+  assert.equal(data.left, 1);
+  assert.equal((await send()).status, 200);
+  const third = await send();
+  assert.equal(third.status, 429);
+  assert.equal(((await third.json()) as any).error, "photo_limit");
+  assert.equal(calls.n, 2); // the blocked one never reached the model
+
+  clock.t += 24 * 3_600_000; // new day, fresh allowance
+  assert.equal((await send()).status, 200);
+});
+
+test("meal photos are members only and refuse junk", async () => {
+  const calls = { n: 0 };
+  const { post, signIn } = setup({ "nc@example.com": [active("111")], "none@example.com": [] }, fakeMeals(calls));
+  assert.equal((await post("/fuel/estimate", { image: PHOTO, mediaType: "image/jpeg" })).status, 401);
+  const outsider = await signIn("none@example.com");
+  const out = await post("/fuel/estimate", { image: PHOTO, mediaType: "image/jpeg" }, { Authorization: `Bearer ${outsider.body.token}` });
+  assert.equal(out.status, 403);
+
+  const { body } = await signIn("nc@example.com");
+  const auth = { Authorization: `Bearer ${body.token}` };
+  assert.equal((await post("/fuel/estimate", { image: PHOTO, mediaType: "image/gif" }, auth)).status, 400);
+  assert.equal((await post("/fuel/estimate", { image: "not base64!!".repeat(20), mediaType: "image/png" }, auth)).status, 400);
+  assert.equal((await post("/fuel/estimate", { mediaType: "image/png" }, auth)).status, 400);
+  assert.equal(calls.n, 0);
+});
+
+test("photos are off without a key, and a model failure is reported plainly", async () => {
+  const off = setup({ "nc@example.com": [active("111")] });
+  const a = await off.signIn("nc@example.com");
+  const res = await off.post("/fuel/estimate", { image: PHOTO, mediaType: "image/jpeg" }, { Authorization: `Bearer ${a.body.token}` });
+  assert.equal(res.status, 503);
+  assert.equal(((await res.json()) as any).error, "photo_unavailable");
+
+  const broken = setup({ "nc@example.com": [active("111")] }, fakeMeals({ n: 0 }, true));
+  const b = await broken.signIn("nc@example.com");
+  const bad = await broken.post("/fuel/estimate", { image: PHOTO, mediaType: "image/jpeg" }, { Authorization: `Bearer ${b.body.token}` });
+  assert.equal(bad.status, 502);
+  assert.equal(((await bad.json()) as any).error, "photo_failed");
 });

@@ -39,6 +39,14 @@ export class PostgresStore implements Store {
         data       jsonb NOT NULL,
         created_at bigint NOT NULL
       )`);
+    await this.db.query(`
+      CREATE TABLE IF NOT EXISTS usage_counts (
+        email text NOT NULL,
+        kind  text NOT NULL,
+        day   text NOT NULL,
+        n     integer NOT NULL,
+        PRIMARY KEY (email, kind, day)
+      )`);
   }
 
   async getCode(email: string): Promise<StoredCode | undefined> {
@@ -106,5 +114,15 @@ export class PostgresStore implements Store {
 
   async deleteDrop(id: string): Promise<void> {
     await this.db.query("DELETE FROM drops WHERE id = $1", [id]);
+  }
+
+  async bumpUsage(email: string, kind: string, day: string): Promise<number> {
+    const { rows } = await this.db.query(
+      `INSERT INTO usage_counts (email, kind, day, n) VALUES ($1, $2, $3, 1)
+       ON CONFLICT (email, kind, day) DO UPDATE SET n = usage_counts.n + 1
+       RETURNING n`,
+      [email, kind, day],
+    );
+    return Number(rows[0]?.n ?? 1);
   }
 }
