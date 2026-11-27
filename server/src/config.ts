@@ -90,7 +90,25 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
       siteUrl: (env.SITE_URL ?? "https://rivoxlabs.com").trim(),
       tinProductIds: list(env.REWARD_TIN_PRODUCT_IDS ?? ""),
       redirectPath: (env.REWARD_TIN_PATH ?? "/collections/all").trim(),
-      hiddenProductIds: list(env.SHOP_HIDE_PRODUCT_IDS ?? ""),
+      // Unset: Sean's standing list. Set it (even to "none") to replace that list.
+      hiddenProductIds: list(env.SHOP_HIDE_PRODUCT_IDS ?? DEFAULT_HIDDEN_PRODUCT_IDS.join(",")),
     },
   };
 }
+
+/**
+ * Kept off the in-app shelf unless SHOP_HIDE_PRODUCT_IDS says otherwise: both
+ * handbooks, the 7-Day Test, Build Your Five-Pack, the No Curfew 2 and 3 month
+ * supplies, the gum 3-pack, and the pouch 3-pack and 12-pack.
+ */
+export const DEFAULT_HIDDEN_PRODUCT_IDS = [
+  "8390656163906",
+  "8546095890498",
+  "8530553438274",
+  "8395630805058",
+  "8414841077826",
+  "8395972542530",
+  "8239093743682",
+  "8281569919042",
+  "8356912857154",
+];
