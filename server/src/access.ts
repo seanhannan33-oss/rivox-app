@@ -14,12 +14,27 @@ export interface Subscription {
   productIds: string[];
   /** Product titles on the subscription's lines. Used only as a fallback. */
   productTitles: string[];
+  /** When the subscription was created, ms since epoch. Null if Loop didn't say. */
+  startedAt: number | null;
+  /** Next billing date, ms since epoch. Null if unknown. */
+  nextBillingAt: number | null;
+}
+
+export interface ProductDetail {
+  /** Earliest start among this product's live subscriptions. Drives the day count. */
+  startedAt: number | null;
+  /** Soonest upcoming billing among the active (not paused) ones. */
+  nextBillingAt: number | null;
+  /** True when every live subscription for this product is paused. */
+  paused: boolean;
 }
 
 export interface Access {
   allowed: boolean;
   /** Which subscriptions grant access. Drives which cards the app shows. */
   products: Product[];
+  /** Dates per product, for the day count and the next-box card. */
+  details: Partial<Record<Product, ProductDetail>>;
 }
 
 export interface ProductMap {
@@ -50,12 +65,31 @@ export function classify(sub: Subscription, map: ProductMap): Product[] {
   return [...found];
 }
 
-export function decideAccess(subs: Subscription[], map: ProductMap): Access {
-  const products = new Set<Product>();
+function isPaused(status: string): boolean {
+  return status.trim().toUpperCase() === "PAUSED";
+}
+
+function minOrNull(a: number | null, b: number | null): number | null {
+  if (a === null) return b;
+  if (b === null) return a;
+  return Math.min(a, b);
+}
+
+export function decideAccess(subs: Subscription[], map: ProductMap, now: number = Date.now()): Access {
+  const details: Partial<Record<Product, ProductDetail>> = {};
   for (const sub of subs) {
     if (!grantsAccess(sub.status)) continue;
-    for (const p of classify(sub, map)) products.add(p);
+    const paused = isPaused(sub.status);
+    // A billing date already in the past is stale, not "next".
+    const upcoming = !paused && sub.nextBillingAt !== null && sub.nextBillingAt > now ? sub.nextBillingAt : null;
+    for (const p of classify(sub, map)) {
+      const d = details[p] ?? { startedAt: null, nextBillingAt: null, paused: true };
+      d.startedAt = minOrNull(d.startedAt, sub.startedAt);
+      d.nextBillingAt = minOrNull(d.nextBillingAt, upcoming);
+      d.paused = d.paused && paused;
+      details[p] = d;
+    }
   }
-  const ordered: Product[] = (["no_curfew", "pouches"] as const).filter((p) => products.has(p));
-  return { allowed: ordered.length > 0, products: ordered };
+  const ordered: Product[] = (["no_curfew", "pouches"] as const).filter((p) => details[p] !== undefined);
+  return { allowed: ordered.length > 0, products: ordered, details };
 }

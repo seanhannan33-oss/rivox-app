@@ -1,7 +1,8 @@
 import { Image, ImageBackground, Pressable, StyleSheet, Text, View } from "react-native";
 import { Body, Button, Label, Screen } from "../../components/ui";
-import { dayLine, nextBadge, toggleHabit } from "../../lib/days";
+import { dayLine, dayNumber, daysUntil, earliestStart, inDays, nextBadge, toggleHabit } from "../../lib/days";
 import { useDayLog } from "../../lib/useDayLog";
+import type { ProductDetail } from "../../api";
 import { useSession } from "../../session";
 import { colors, fonts, radius } from "../../theme";
 
@@ -15,10 +16,15 @@ const MG_PER_POUCH = 60;
 
 export default function Today() {
   const { email, access, signOut } = useSession();
-  const { ready, entry, streak, day, update } = useDayLog(email);
+  const { ready, entry, streak, today, firstDay, update } = useDayLog(email);
   const products = access?.products ?? [];
   const hasNoCurfew = products.includes("no_curfew");
   const hasPouches = products.includes("pouches");
+
+  // Day 1 is the day they subscribed. If Loop didn't give a date, fall back to their first day in the app.
+  const noCurfew = access?.details?.no_curfew;
+  const pouchSub = access?.details?.pouches;
+  const day = dayNumber(earliestStart([noCurfew?.startedAt, pouchSub?.startedAt]) ?? firstDay, today);
 
   const pouches = entry.pouches ?? 0;
   const badge = nextBadge(streak);
@@ -75,6 +81,9 @@ export default function Today() {
             </View>
           </View>
         ) : null}
+        {hasNoCurfew ? (
+          <NextBox what="NEXT BOX" detail={noCurfew} today={today} line="You do nothing. We handle it. Try to keep up." />
+        ) : null}
 
         {hasPouches ? (
           <View style={s.card}>
@@ -101,6 +110,9 @@ export default function Today() {
             ) : null}
             <Text style={s.note}>{MG_PER_POUCH} mg caffeine a pouch. Count it with your coffee.</Text>
           </View>
+        ) : null}
+        {hasPouches ? (
+          <NextBox what="NEXT 5 TINS" detail={pouchSub} today={today} line="Already handled. Try not to run out first." />
         ) : null}
 
         <Label style={s.section}>THE BORING STUFF YOU KEEP SKIPPING</Label>
@@ -134,6 +146,38 @@ export default function Today() {
         ) : null}
       </View>
     </Screen>
+  );
+}
+
+/** Shows only when Loop gave us something true to say. */
+function NextBox({
+  what,
+  detail,
+  today,
+  line,
+}: {
+  what: string;
+  detail: ProductDetail | undefined;
+  today: string;
+  line: string;
+}) {
+  if (!detail) return null;
+  if (detail.paused) {
+    return (
+      <View style={s.nextBox}>
+        <Text style={s.nextTitle}>{what} ON HOLD</Text>
+        <Text style={s.nextLine}>You paused it. It will be here when you're done hiding.</Text>
+      </View>
+    );
+  }
+  if (detail.nextBillingAt === null) return null;
+  return (
+    <View style={s.nextBox}>
+      <Text style={s.nextTitle}>
+        {what} BILLS {inDays(daysUntil(detail.nextBillingAt, today))}
+      </Text>
+      <Text style={s.nextLine}>{line}</Text>
+    </View>
   );
 }
 
@@ -209,6 +253,17 @@ const s = StyleSheet.create({
   mg: { fontFamily: fonts.bold, color: colors.yellow, fontSize: 15 },
   minus: { alignItems: "center", paddingTop: 12, paddingBottom: 2 },
   note: { fontFamily: fonts.body, color: colors.secondary, fontSize: 13, textAlign: "center", marginTop: 12 },
+  nextBox: {
+    borderLeftWidth: 4,
+    borderLeftColor: colors.pink,
+    backgroundColor: colors.panel,
+    borderRadius: radius.sm,
+    paddingVertical: 14,
+    paddingHorizontal: 16,
+    marginTop: 12,
+  },
+  nextTitle: { fontFamily: fonts.headline, color: colors.text, fontSize: 18 },
+  nextLine: { fontFamily: fonts.body, color: colors.secondary, fontSize: 13, marginTop: 4 },
   section: { marginTop: 32, marginBottom: 10 },
   habit: {
     flexDirection: "row",

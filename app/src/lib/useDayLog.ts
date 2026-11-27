@@ -1,7 +1,7 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { AppState } from "react-native";
-import { dateKey, dayNumber, prune, streak, type DayEntry, type DayLog } from "./days";
+import { dateKey, prune, streak, type DayEntry, type DayLog } from "./days";
 
 interface Saved {
   firstDay: string;
@@ -67,7 +67,9 @@ export function useDayLog(email: string | null) {
       ready: saved !== null,
       entry: saved?.log[today] ?? {},
       streak: saved ? streak(saved.log, today) : 0,
-      day: saved ? dayNumber(saved.firstDay, today) : 1,
+      today,
+      /** The first day they used the app. The screen prefers the real subscription date when it has one. */
+      firstDay: saved?.firstDay ?? today,
       update,
     }),
     [saved, today, update],

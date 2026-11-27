@@ -1,6 +1,18 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { addDays, dateKey, dayNumber, daysBetween, nextBadge, prune, streak, toggleHabit } from "./days.ts";
+import {
+  addDays,
+  dateKey,
+  dayNumber,
+  daysBetween,
+  daysUntil,
+  earliestStart,
+  inDays,
+  nextBadge,
+  prune,
+  streak,
+  toggleHabit,
+} from "./days.ts";
 
 test("dateKey uses the local calendar day", () => {
   assert.equal(dateKey(new Date(2026, 10, 26, 23, 59)), "2026-11-26");
@@ -39,4 +51,25 @@ test("badges, day number, prune and habit toggle", () => {
   ]);
   assert.deepEqual(toggleHabit({ caps: true }, "sleep"), { caps: true, habits: ["sleep"] });
   assert.deepEqual(toggleHabit({ habits: ["sleep"] }, "sleep"), { habits: [] });
+});
+
+test("daysUntil counts calendar days and never goes negative", () => {
+  assert.equal(daysUntil(new Date(2026, 10, 26, 23, 0).getTime(), "2026-11-26"), 0);
+  assert.equal(daysUntil(new Date(2026, 10, 27, 0, 5).getTime(), "2026-11-26"), 1);
+  assert.equal(daysUntil(new Date(2027, 0, 14, 9, 0).getTime(), "2026-11-26"), 49);
+  assert.equal(daysUntil(new Date(2026, 10, 20).getTime(), "2026-11-26"), 0);
+});
+
+test("earliestStart picks the oldest known date and ignores gaps", () => {
+  const a = new Date(2026, 9, 17, 10).getTime();
+  const b = new Date(2026, 10, 1, 10).getTime();
+  assert.equal(earliestStart([b, null, a, undefined]), "2026-10-17");
+  assert.equal(earliestStart([null, undefined]), null);
+  assert.equal(dayNumber(earliestStart([a])!, "2026-11-26"), 41);
+});
+
+test("inDays wording", () => {
+  assert.equal(inDays(0), "TODAY");
+  assert.equal(inDays(1), "IN 1 DAY");
+  assert.equal(inDays(49), "IN 49 DAYS");
 });

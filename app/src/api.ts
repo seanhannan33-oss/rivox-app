@@ -1,9 +1,17 @@
 import { API_URL } from "./config";
 
 export type Product = "no_curfew" | "pouches";
+export interface ProductDetail {
+  /** ms since epoch, or null when Loop didn't say. */
+  startedAt: number | null;
+  nextBillingAt: number | null;
+  paused: boolean;
+}
 export interface Access {
   allowed: boolean;
   products: Product[];
+  /** Missing on sessions saved before the server tracked dates. */
+  details?: Partial<Record<Product, ProductDetail>>;
 }
 
 export class ApiError extends Error {

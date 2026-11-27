@@ -39,7 +39,7 @@ export function createApp(deps: Deps) {
   const app = new Hono();
 
   async function refreshAccess(address: string): Promise<Access> {
-    const access = decideAccess(await loop.subscriptionsByEmail(address), map);
+    const access = decideAccess(await loop.subscriptionsByEmail(address), map, now());
     await store.putMember({ email: address, access, checkedAt: now() });
     return access;
   }
@@ -105,7 +105,8 @@ export function createApp(deps: Deps) {
     if (!address) return c.json({ error: "unauthorized" }, 401);
 
     const member = await store.getMember(address);
-    if (member && now() - member.checkedAt < ACCESS_FRESH_MS) {
+    // A record saved before dates were tracked has no details: treat it as due for a re-check.
+    if (member && member.access.details && now() - member.checkedAt < ACCESS_FRESH_MS) {
       return c.json({ email: address, access: member.access });
     }
     try {

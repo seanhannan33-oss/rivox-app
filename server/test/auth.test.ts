@@ -62,24 +62,27 @@ const active = (productId: string): Subscription => ({
   status: "ACTIVE",
   productIds: [productId],
   productTitles: [],
+  startedAt: null,
+  nextBillingAt: null,
 });
 
 test("a subscriber signs in and gets access", async () => {
   const { signIn, app } = setup({ "dan@example.com": [active("111")] });
   const { res, body } = await signIn("Dan@Example.com ");
   assert.equal(res.status, 200);
-  assert.deepEqual(body.access, { allowed: true, products: ["no_curfew"] });
+  const expected = { allowed: true, products: ["no_curfew"], details: { no_curfew: { startedAt: null, nextBillingAt: null, paused: false } } };
+  assert.deepEqual(body.access, expected);
 
   const me = await app.request("/me", { headers: { Authorization: `Bearer ${body.token}` } });
   assert.equal(me.status, 200);
-  assert.deepEqual(await me.json(), { email: "dan@example.com", access: { allowed: true, products: ["no_curfew"] } });
+  assert.deepEqual(await me.json(), { email: "dan@example.com", access: expected });
 });
 
 test("a non-subscriber can sign in but is locked out", async () => {
   const { signIn } = setup();
   const { res, body } = await signIn("nobody@example.com");
   assert.equal(res.status, 200);
-  assert.deepEqual(body.access, { allowed: false, products: [] });
+  assert.deepEqual(body.access, { allowed: false, products: [], details: {} });
 });
 
 test("request-code answers the same for subscribers and strangers", async () => {
@@ -152,7 +155,7 @@ test("cancelling locks the member out once the webhook arrives", async () => {
   assert.equal(hook.status, 200);
 
   const me = await app.request("/me", { headers: { Authorization: `Bearer ${body.token}` } });
-  assert.deepEqual(((await me.json()) as any).access, { allowed: false, products: [] });
+  assert.deepEqual(((await me.json()) as any).access, { allowed: false, products: [], details: {} });
 });
 
 test("/me re-checks Loop only after the answer goes stale", async () => {

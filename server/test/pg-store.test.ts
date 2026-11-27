@@ -39,15 +39,15 @@ test("codes: save, overwrite, read back and delete", { skip }, async () => {
 
 test("members: save, update and read back", { skip }, async () => {
   assert.equal(await store.getMember("m@b.co"), undefined);
-  await store.putMember({ email: "m@b.co", access: { allowed: true, products: ["no_curfew"] }, checkedAt: 1 });
+  await store.putMember({ email: "m@b.co", access: { allowed: true, products: ["no_curfew"], details: {} }, checkedAt: 1 });
   await store.putMember({
     email: "m@b.co",
-    access: { allowed: true, products: ["no_curfew", "pouches"] },
+    access: { allowed: true, products: ["no_curfew", "pouches"], details: { no_curfew: { startedAt: 1760000000000, nextBillingAt: null, paused: false } } },
     checkedAt: 1764199400000,
   });
   assert.deepEqual(await store.getMember("m@b.co"), {
     email: "m@b.co",
-    access: { allowed: true, products: ["no_curfew", "pouches"] },
+    access: { allowed: true, products: ["no_curfew", "pouches"], details: { no_curfew: { startedAt: 1760000000000, nextBillingAt: null, paused: false } } },
     checkedAt: 1764199400000,
   });
 });

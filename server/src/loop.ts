@@ -21,6 +21,29 @@ function asString(value: unknown): string {
   return typeof value === "string" || typeof value === "number" ? String(value) : "";
 }
 
+/**
+ * Loop's date fields, as ms since epoch. Accepts epoch seconds, epoch ms
+ * (as number or digit string) or an ISO date string. Anything else is null.
+ */
+export function toMs(value: unknown): number | null {
+  if (typeof value === "number" || (typeof value === "string" && /^\d+$/.test(value.trim()))) {
+    const n = Number(value);
+    if (!Number.isFinite(n) || n <= 0) return null;
+    return n < 1e11 ? n * 1000 : n; // below 1e11 can only be seconds
+  }
+  if (typeof value === "string" && value.trim()) {
+    const t = Date.parse(value);
+    return Number.isNaN(t) ? null : t;
+  }
+  return null;
+}
+
+function describeValue(value: unknown): string {
+  if (typeof value === "string") return `string(${value.length})`;
+  if (typeof value === "number") return `number(${String(Math.trunc(value)).length} digits)`;
+  return value === null ? "null" : typeof value;
+}
+
 /** Tolerant parser: accepts a bare array or an object wrapping one under `data`. */
 export function parseSubscriptions(body: unknown): Subscription[] {
   const rows = Array.isArray(body) ? body : asArray((body as Json | null)?.data);
@@ -36,7 +59,14 @@ export function parseSubscriptions(body: unknown): Subscription[] {
       if (id) productIds.push(id);
       if (title) productTitles.push(title);
     }
-    return { id: asString(r.id), status: asString(r.status), productIds, productTitles };
+    return {
+      id: asString(r.id),
+      status: asString(r.status),
+      productIds,
+      productTitles,
+      startedAt: toMs(r.createdAt),
+      nextBillingAt: toMs(r.nextBillingDateEpoch),
+    };
   });
 }
 
@@ -51,7 +81,13 @@ function describeShape(body: unknown, subs: Subscription[]) {
     count: rows.length,
     subscriptionKeys: Object.keys(first),
     lineKeys: Object.keys(firstLine),
-    parsed: subs.map((s) => ({ status: s.status, products: s.productIds.length, titles: s.productTitles.length })),
+    dateFormats: { createdAt: describeValue(first.createdAt), nextBilling: describeValue(first.nextBillingDateEpoch) },
+    parsed: subs.map((s) => ({
+      status: s.status,
+      products: s.productIds.length,
+      hasStart: s.startedAt !== null,
+      hasNextBilling: s.nextBillingAt !== null,
+    })),
   };
 }
 

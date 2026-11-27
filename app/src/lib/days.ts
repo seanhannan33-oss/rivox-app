@@ -79,3 +79,19 @@ export function dayLine(n: number): string {
   if (n <= 90) return "The home stretch. Finish what you started.";
   return "Past ninety. This is just who you are now.";
 }
+
+/** Whole calendar days from today until a moment in time. Never negative. */
+export function daysUntil(whenMs: number, today: string): number {
+  return Math.max(0, daysBetween(today, dateKey(new Date(whenMs))));
+}
+
+/** The earliest real start date we know of, as a day key. Null if we know none. */
+export function earliestStart(starts: (number | null | undefined)[]): string | null {
+  const known = starts.filter((s): s is number => typeof s === "number" && s > 0);
+  return known.length ? dateKey(new Date(Math.min(...known))) : null;
+}
+
+export function inDays(n: number): string {
+  if (n === 0) return "TODAY";
+  return n === 1 ? "IN 1 DAY" : `IN ${n} DAYS`;
+}
