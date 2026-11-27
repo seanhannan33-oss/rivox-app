@@ -1,11 +1,9 @@
 // Loop Subscriptions client.
 //
-// UNVERIFIED: Loop's API reference confirms an Admin API call named
-// "Read subscriptions for customer via email address" and webhooks for
-// subscription paused, resumed and cancelled. The base URL, auth header,
-// exact path and response shape below are best guesses kept in config so
-// they can be corrected without code changes. Confirm each against
-// https://developer.loopwork.co with a real token before launch.
+// Loop's docs confirm: GET {base}/customer/{email}/subscription with the
+// token in X-Loop-Token (scope: Read Subscription contracts). The docs do not
+// show the response body, so the parser below is tolerant and the client logs
+// the response's field names (never values) so the shape can be confirmed.
 import type { Subscription } from "./access.ts";
 import type { Config } from "./config.ts";
 
@@ -42,6 +40,21 @@ export function parseSubscriptions(body: unknown): Subscription[] {
   });
 }
 
+/** Field names and statuses only. No emails, names, addresses or IDs. */
+function describeShape(body: unknown, subs: Subscription[]) {
+  const top = body && typeof body === "object" && !Array.isArray(body) ? Object.keys(body as Json) : ["(array)"];
+  const rows = Array.isArray(body) ? body : asArray((body as Json | null)?.data);
+  const first = (rows[0] ?? {}) as Json;
+  const firstLine = (asArray(first.lines)[0] ?? {}) as Json;
+  return {
+    topKeys: top,
+    count: rows.length,
+    subscriptionKeys: Object.keys(first),
+    lineKeys: Object.keys(firstLine),
+    parsed: subs.map((s) => ({ status: s.status, products: s.productIds.length, titles: s.productTitles.length })),
+  };
+}
+
 export class HttpLoopClient implements LoopClient {
   constructor(private readonly config: Config["loop"]) {}
 
@@ -53,7 +66,13 @@ export class HttpLoopClient implements LoopClient {
     });
     // A customer Loop has never seen is not an error. They just have no subscription.
     if (res.status === 404) return [];
-    if (!res.ok) throw new Error(`Loop responded ${res.status} looking up subscriptions.`);
-    return parseSubscriptions(await res.json());
+    if (!res.ok) {
+      const detail = (await res.text().catch(() => "")).slice(0, 300);
+      throw new Error(`Loop responded ${res.status} looking up subscriptions. ${detail}`);
+    }
+    const body: unknown = await res.json();
+    const subs = parseSubscriptions(body);
+    console.log("Loop lookup ok:", JSON.stringify(describeShape(body, subs)));
+    return subs;
   }
 }

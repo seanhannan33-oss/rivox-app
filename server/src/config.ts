@@ -32,7 +32,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
     sessionSecret,
     loop: {
       token: env.LOOP_API_TOKEN ?? "",
-      base: env.LOOP_API_BASE ?? "https://api.loopsubscriptions.com/admin/2023-10",
+      base: env.LOOP_API_BASE ?? "https://api.loopsubscriptions.com/admin/2026-04",
       authHeader: env.LOOP_AUTH_HEADER ?? "X-Loop-Token",
       subscriptionsByEmailPath: env.LOOP_SUBSCRIPTIONS_BY_EMAIL_PATH ?? "/customer/{email}/subscription",
       webhookSecret: env.LOOP_WEBHOOK_SECRET ?? "",
