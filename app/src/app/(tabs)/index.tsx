@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { Alert, Image, ImageBackground, Pressable, StyleSheet, Text, View } from "react-native";
+import { Rewards } from "../../components/Rewards";
 import { Body, Button, Label, Screen } from "../../components/ui";
 import {
   BADGES,
@@ -170,6 +171,8 @@ export default function Today() {
         {hasPouches ? (
           <NextBox what="NEXT 5 TINS" detail={pouchSub} today={today} line="Already handled. Try not to run out first." />
         ) : null}
+
+        <Rewards />
 
         <Label style={s.section}>THE BORING STUFF YOU KEEP SKIPPING</Label>
         {HABITS.map((h) => {

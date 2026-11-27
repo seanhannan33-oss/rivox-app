@@ -22,6 +22,8 @@ interface DayLogValue {
   earnedToday: number | null;
   /** Members who've checked in today, this one included. Null until the server answers. */
   crowd: number | null;
+  /** Their points balance, from the server. Null until it answers. */
+  points: number | null;
   update: (change: (entry: DayEntry | undefined) => DayEntry) => void;
 }
 
@@ -68,12 +70,15 @@ export function DayLogProvider({ children }: { children: ReactNode }) {
   // One yes/no per day is all that's sent. Runs on load, on change, and on a new day.
   const done = doc ? checkedIn(doc.log[today]) : null;
   const [crowd, setCrowd] = useState<number | null>(null);
+  const [points, setPoints] = useState<number | null>(null);
   useEffect(() => {
     if (!token || done === null) return;
     let alive = true;
     putCheckin(token, today, done)
       .then((res) => {
-        if (alive) setCrowd(res.count);
+        if (!alive) return;
+        setCrowd(res.count);
+        if (typeof res.points === "number") setPoints(Math.max(0, res.points));
       })
       .catch(() => {
         // No signal: the count just doesn't show.
@@ -93,9 +98,10 @@ export function DayLogProvider({ children }: { children: ReactNode }) {
       best: doc ? bestStreak(doc.log) : 0,
       earnedToday: doc ? badgeEarnedToday(doc.log, today) : null,
       crowd,
+      points,
       update,
     }),
-    [ready, today, doc, crowd, update],
+    [ready, today, doc, crowd, points, update],
   );
 
   return <DayLogContext.Provider value={value}>{children}</DayLogContext.Provider>;

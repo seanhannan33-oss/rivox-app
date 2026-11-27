@@ -82,3 +82,10 @@ Checks: `npm run typecheck`. Not yet run on a real phone.
 - `PUT /checkin` keeps one yes or no per member per day and returns the day's total. The app shows it only when at least five others have checked in.
 - Badges at 7, 14, 30, 60, 90, 180 and 365 days are worked out on the phone from the longest streak.
 - Push: the app registers a token only after the member taps "Turn on alerts", and only in a real build with an Expo project id (run `eas init`). The admin page sends pushes through Expo's push service. `EXPO_ACCESS_TOKEN` is optional.
+
+## Points and rewards
+
+- The server awards 1 point per checked-in day plus one-time streak bonuses (`STREAK_BONUS`). The phone cannot award points.
+- Rewards: `$5 off` at 60 points and a free tin at 90 (`FIVE_OFF_COST`, `FREE_TIN_COST`).
+- Redeeming re-checks the subscription with Loop, takes the points under a per-member lock, then creates a single-use Shopify discount code tied to the member. If the code can't be made the points are returned.
+- Redeeming is off until `SHOPIFY_STORE_DOMAIN` and `SHOPIFY_ADMIN_TOKEN` are set. The token needs write_discounts, read_customers and read_products. Set `REWARD_TIN_PRODUCT_IDS` to the tin products.

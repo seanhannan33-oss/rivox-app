@@ -12,6 +12,7 @@ import {
   earliestStart,
   endsLabel,
   inDays,
+  nextReward,
   nextBadge,
   prune,
   streak,
@@ -133,4 +134,14 @@ test("the crowd line only appears when there's a real crowd", () => {
   assert.equal(crowdLine(5, true), null); // that's only 4 others
   assert.equal(crowdLine(313, true), "You and 312 others checked in today.");
   assert.equal(crowdLine(312, false), "312 beat you to it today.");
+});
+
+test("nextReward points at the nearest reward still out of reach", () => {
+  const rewards = [{ id: "tin", cost: 90 }, { id: "five", cost: 60 }];
+  assert.deepEqual(nextReward(0, rewards), { reward: { id: "five", cost: 60 }, left: 60, progress: 0 });
+  assert.deepEqual(nextReward(45, rewards), { reward: { id: "five", cost: 60 }, left: 15, progress: 0.75 });
+  assert.equal(nextReward(60, rewards)!.reward.id, "tin");
+  assert.equal(nextReward(60, rewards)!.left, 30);
+  assert.equal(nextReward(90, rewards), null);
+  assert.equal(nextReward(10, []), null);
 });

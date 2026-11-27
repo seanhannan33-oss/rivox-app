@@ -149,3 +149,10 @@ export function crowdLine(count: number | null, doneToday: boolean): string | nu
   if (others < MIN_CROWD) return null;
   return doneToday ? `You and ${others} others checked in today.` : `${others} beat you to it today.`;
 }
+
+/** The cheapest reward they can't afford yet, and how far along they are. Null when they can afford everything. */
+export function nextReward<T extends { cost: number }>(points: number, rewards: T[]): { reward: T; left: number; progress: number } | null {
+  const ahead = rewards.filter((r) => r.cost > points).sort((a, b) => a.cost - b.cost)[0];
+  if (!ahead) return null;
+  return { reward: ahead, left: ahead.cost - points, progress: Math.max(0, Math.min(1, points / ahead.cost)) };
+}

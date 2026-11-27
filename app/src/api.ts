@@ -108,8 +108,12 @@ export function putSync(token: string, part: SyncPart, data: unknown): Promise<{
   });
 }
 
-/** Tells the server whether they've checked in today. Returns how many members have, them included. */
-export function putCheckin(token: string, day: string, done: boolean): Promise<{ count: number }> {
+/** Tells the server whether they've checked in today. Returns how many members have, them included, and their points. */
+export function putCheckin(
+  token: string,
+  day: string,
+  done: boolean,
+): Promise<{ count: number; points?: number; earned?: number }> {
   return call("/checkin", {
     method: "PUT",
     headers: { authorization: `Bearer ${token}` },
@@ -130,6 +134,41 @@ export function unregisterPush(token: string, pushToken: string): Promise<{ ok: 
     method: "POST",
     headers: { authorization: `Bearer ${token}` },
     body: JSON.stringify({ token: pushToken }),
+  });
+}
+
+export interface Reward {
+  id: string;
+  title: string;
+  blurb: string;
+  cost: number;
+}
+export interface ClaimedReward {
+  id: string;
+  rewardId: string;
+  title: string;
+  cost: number;
+  code: string;
+  url: string;
+  createdAt: number;
+}
+export interface RewardsView {
+  points: number;
+  rewards: Reward[];
+  /** False until the server can create reward codes. Points still add up. */
+  open: boolean;
+  claimed: ClaimedReward[];
+}
+
+export function fetchRewards(token: string): Promise<RewardsView> {
+  return call("/rewards", { headers: { authorization: `Bearer ${token}` } });
+}
+
+export function redeemReward(token: string, rewardId: string): Promise<{ claimed: ClaimedReward; points: number }> {
+  return call("/rewards/redeem", {
+    method: "POST",
+    headers: { authorization: `Bearer ${token}` },
+    body: JSON.stringify({ rewardId }),
   });
 }
 
@@ -166,6 +205,14 @@ export function errorMessage(err: unknown): string {
       return "That photo didn't go through. Try another.";
     case "photo_failed":
       return "Couldn't read that plate. Try again, or tap a number.";
+    case "not_enough_points":
+      return "Not enough points yet. Keep showing up.";
+    case "rewards_unavailable":
+      return "Redeeming isn't open yet. Your points are safe.";
+    case "reward_failed":
+      return "Couldn't make your code. Your points are back. Try again.";
+    case "members_only":
+      return "That's for active members. Check your subscription.";
     case "too_many_requests":
       return "Too many tries. Give it a few minutes.";
     case "network":

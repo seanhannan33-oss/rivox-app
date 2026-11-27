@@ -83,7 +83,7 @@ export default function Fuel() {
         <Label>FUEL</Label>
         <Text style={s.h1}>PROTEIN</Text>
         <Text style={[s.h1, s.yellow]}>FIRST.</Text>
-        <Body style={s.intro}>No points. No cleanses. Hit the number. Eat like a grown man.</Body>
+        <Body style={s.intro}>No fads. No cleanses. Hit the number. Eat like a grown man.</Body>
 
         {!ready ? null : !profile || editingWeight ? (
           <WeightCard
