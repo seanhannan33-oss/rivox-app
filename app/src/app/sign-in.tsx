@@ -5,11 +5,13 @@ import { errorMessage, requestCode, verifyCode } from "../api";
 import { Body, Button, ErrorText, Headline, Label, Screen } from "../components/ui";
 import { LINKS } from "../config";
 import { useSession } from "../session";
-import { colors, fonts, radius } from "../theme";
+import { fonts, radius, themed, useColors } from "../theme";
 
 const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 export default function SignIn() {
+  const s = useS();
+  const colors = useColors();
   const { signIn } = useSession();
   const [email, setEmail] = useState("");
   const [code, setCode] = useState("");
@@ -56,7 +58,10 @@ export default function SignIn() {
 
   return (
     <Screen>
-      <Image source={require("../../assets/brand/logo.png")} style={s.logo} resizeMode="contain" accessibilityLabel="Rivox Labs" />
+      {/* The logo is white, so on the pale page it sits on a navy plate. */}
+      <View style={s.logoPlate}>
+        <Image source={require("../../assets/brand/logo.png")} style={s.logo} resizeMode="contain" accessibilityLabel="Rivox Labs" />
+      </View>
       <Headline>MEMBERS ONLY.</Headline>
       <Headline style={s.yellow}>PROVE IT.</Headline>
       <Body style={s.intro}>
@@ -129,9 +134,19 @@ export default function SignIn() {
   );
 }
 
-const s = StyleSheet.create({
-  logo: { width: 140, height: 48, marginTop: 16, marginBottom: 32, alignSelf: "flex-start" },
-  yellow: { color: colors.yellow },
+const useS = themed((colors) =>
+  StyleSheet.create({
+  logoPlate: {
+    alignSelf: "flex-start",
+    backgroundColor: colors.logoPlate,
+    borderRadius: radius.sm,
+    paddingHorizontal: colors.logoPlate === "transparent" ? 0 : 12,
+    paddingVertical: colors.logoPlate === "transparent" ? 0 : 8,
+    marginTop: 16,
+    marginBottom: 32,
+  },
+  logo: { width: 140, height: 48 },
+  yellow: { color: colors.accent },
   intro: { marginTop: 16 },
   label: { marginTop: 28, marginBottom: 8 },
   input: {
@@ -148,7 +163,8 @@ const s = StyleSheet.create({
   code: { fontFamily: fonts.bold, fontSize: 26, letterSpacing: 10, textAlign: "center" },
   gap: { marginTop: 16 },
   linkRow: { paddingVertical: 14, alignItems: "center" },
-  link: { fontFamily: fonts.bold, color: colors.yellow, fontSize: 14 },
+  link: { fontFamily: fonts.bold, color: colors.accent, fontSize: 14 },
   footer: { fontFamily: fonts.body, color: colors.muted, fontSize: 14 },
   spacer: { flexGrow: 1, minHeight: 24 },
-});
+}),
+);

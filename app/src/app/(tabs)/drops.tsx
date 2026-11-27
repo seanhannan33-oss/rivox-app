@@ -8,9 +8,11 @@ import { Body, Button, Headline, Label } from "../../components/ui";
 import { endsLabel, tagLink } from "../../lib/days";
 import { disablePush, enablePush, pushAvailable, pushState, type PushState } from "../../lib/push";
 import { useSession } from "../../session";
-import { colors, fonts, radius } from "../../theme";
+import { fonts, onPhoto, radius, themed, useColors } from "../../theme";
 
 export default function Drops() {
+  const s = useS();
+  const colors = useColors();
   const { token, signOut } = useSession();
   const [drops, setDrops] = useState<Drop[] | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -53,7 +55,7 @@ export default function Drops() {
           refreshControl={
             <RefreshControl
               refreshing={refreshing}
-              tintColor={colors.yellow}
+              tintColor={colors.accent}
               onRefresh={async () => {
                 setRefreshing(true);
                 await load();
@@ -112,6 +114,7 @@ export default function Drops() {
 
 /** The opt-in for drop alerts. Hidden entirely until this build can actually receive them. */
 function Alerts({ token }: { token: string | null }) {
+  const s = useS();
   const [state, setState] = useState<PushState | null>(null);
   const [busy, setBusy] = useState(false);
   const [failed, setFailed] = useState(false);
@@ -173,12 +176,14 @@ function Alerts({ token }: { token: string | null }) {
 }
 
 function DropCard({ drop, now }: { drop: Drop; now: number }) {
+  const s = useS();
+  const colors = useColors();
   const deal = drop.kind === "deal";
   const ends = endsLabel(drop.endsAt, now);
   const tag = [deal ? "APP-ONLY DEAL" : "FLAVOR DROP", ends].filter(Boolean).join(" · ");
   return (
     <View style={[s.card, deal ? s.cardDeal : s.cardFlavor]}>
-      <Text style={[s.tag, { color: deal ? colors.yellow : colors.pink }]}>{tag}</Text>
+      <Text style={[s.tag, { color: deal ? colors.accent : colors.alert }]}>{tag}</Text>
       <Text style={s.cardTitle}>{drop.title}</Text>
       <Body style={s.cardBody}>{drop.body}</Body>
       <Button
@@ -190,13 +195,14 @@ function DropCard({ drop, now }: { drop: Drop; now: number }) {
   );
 }
 
-const s = StyleSheet.create({
+const useS = themed((colors) =>
+  StyleSheet.create({
   root: { flex: 1, backgroundColor: colors.bg },
   flex: { flex: 1 },
   pinkBar: { height: 6, backgroundColor: colors.pink },
   content: { flexGrow: 1, paddingBottom: 40 },
   banner: { height: 104, justifyContent: "center", paddingHorizontal: 24 },
-  bannerShade: { position: "absolute", top: 0, right: 0, bottom: 0, left: 0, backgroundColor: "rgba(7,18,36,0.55)" },
+  bannerShade: { position: "absolute", top: 0, right: 0, bottom: 0, left: 0, backgroundColor: onPhoto.shade },
   logo: { width: 120, height: 42 },
   pill: {
     position: "absolute",
@@ -210,9 +216,9 @@ const s = StyleSheet.create({
   pillText: { fontFamily: fonts.bold, color: colors.ink, fontSize: 11, letterSpacing: 1 },
   body: { paddingHorizontal: 24, paddingTop: 24 },
   h1: { marginTop: 6 },
-  yellow: { color: colors.yellow },
+  yellow: { color: colors.accent },
   alerts: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginTop: 20 },
-  alertsOn: { fontFamily: fonts.bold, color: colors.yellow, fontSize: 12, letterSpacing: 1 },
+  alertsOn: { fontFamily: fonts.bold, color: colors.accent, fontSize: 12, letterSpacing: 1 },
   alertsLink: { fontFamily: fonts.bold, color: colors.muted, fontSize: 13, textDecorationLine: "underline" },
   alertsCard: {
     backgroundColor: colors.panel,
@@ -224,7 +230,7 @@ const s = StyleSheet.create({
   },
   alertsTitle: { fontFamily: fonts.headline, color: colors.text, fontSize: 22 },
   alertsBody: { marginTop: 4, marginBottom: 14 },
-  alertsFail: { fontFamily: fonts.medium, color: colors.pink, fontSize: 13, marginTop: 10 },
+  alertsFail: { fontFamily: fonts.medium, color: colors.alert, fontSize: 13, marginTop: 10 },
   state: { marginTop: 28 },
   retry: { marginTop: 16 },
   emptyTitle: { fontFamily: fonts.headline, color: colors.text, fontSize: 22, marginBottom: 6 },
@@ -236,9 +242,10 @@ const s = StyleSheet.create({
     padding: 18,
     marginTop: 20,
   },
-  cardDeal: { borderColor: colors.yellow },
+  cardDeal: { borderColor: colors.outline },
   cardFlavor: { borderColor: colors.pink },
   tag: { fontFamily: fonts.bold, fontSize: 11, letterSpacing: 1.2 },
   cardTitle: { fontFamily: fonts.headline, color: colors.text, fontSize: 28, lineHeight: 32, marginTop: 8 },
   cardBody: { marginTop: 6, marginBottom: 16 },
-});
+}),
+);

@@ -24,7 +24,7 @@ import {
 import { useDayLog } from "../../lib/useDayLog";
 import { useTrainLog } from "../../lib/useTrainLog";
 import { useSession } from "../../session";
-import { colors, fonts, radius } from "../../theme";
+import { fonts, onPhoto, radius, themed } from "../../theme";
 
 const STATE_TEXT: Record<DayState, string> = {
   done: "DONE",
@@ -34,6 +34,7 @@ const STATE_TEXT: Record<DayState, string> = {
 };
 
 export default function Train() {
+  const s = useS();
   const { access } = useSession();
   const { today, firstDay } = useDayLog();
   const { ready, log, update } = useTrainLog(today);
@@ -185,9 +186,10 @@ export default function Train() {
   );
 }
 
-const s = StyleSheet.create({
+const useS = themed((colors) =>
+  StyleSheet.create({
   banner: { height: 104, justifyContent: "center", paddingHorizontal: 24 },
-  bannerShade: { position: "absolute", top: 0, right: 0, bottom: 0, left: 0, backgroundColor: "rgba(7,18,36,0.55)" },
+  bannerShade: { position: "absolute", top: 0, right: 0, bottom: 0, left: 0, backgroundColor: onPhoto.shade },
   logo: { width: 120, height: 42 },
   pill: {
     position: "absolute",
@@ -201,8 +203,8 @@ const s = StyleSheet.create({
   pillText: { fontFamily: fonts.bold, color: colors.ink, fontSize: 11, letterSpacing: 1 },
   body: { paddingHorizontal: 24, paddingTop: 24 },
   h1: { fontFamily: fonts.headline, color: colors.text, fontSize: 52, lineHeight: 54 },
-  yellow: { color: colors.yellow },
-  pink: { color: colors.pink },
+  yellow: { color: colors.accent },
+  pink: { color: colors.alert },
   what: { marginTop: 10 },
   sets: { flexDirection: "row", gap: 8, marginTop: 20, marginBottom: 16 },
   set: {
@@ -214,8 +216,8 @@ const s = StyleSheet.create({
     borderRadius: radius.sm,
     paddingVertical: 12,
   },
-  setDone: { backgroundColor: colors.yellow, borderColor: colors.yellow },
-  setNext: { borderColor: colors.yellow, borderWidth: 2 },
+  setDone: { backgroundColor: colors.yellow, borderColor: colors.outline },
+  setNext: { borderColor: colors.outline, borderWidth: 2 },
   setReps: { fontFamily: fonts.headline, color: colors.text, fontSize: 26 },
   setRepsDone: { color: colors.ink },
   setLabel: { fontFamily: fonts.bold, color: colors.muted, fontSize: 10, letterSpacing: 1, marginTop: 2 },
@@ -229,7 +231,7 @@ const s = StyleSheet.create({
     justifyContent: "center",
     paddingVertical: 8,
   },
-  restClock: { fontFamily: fonts.headline, color: colors.pink, fontSize: 22 },
+  restClock: { fontFamily: fonts.headline, color: colors.alert, fontSize: 22 },
   restSkip: { fontFamily: fonts.body, color: colors.muted, fontSize: 12, marginTop: 2 },
   under: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginTop: 12, gap: 12 },
   note: { fontFamily: fonts.medium, color: colors.secondary, fontSize: 13, flexShrink: 1 },
@@ -248,9 +250,10 @@ const s = StyleSheet.create({
     paddingHorizontal: 16,
     marginBottom: 8,
   },
-  dayToday: { borderColor: colors.yellow },
+  dayToday: { borderColor: colors.outline },
   dayText: { fontFamily: fonts.medium, color: colors.text, fontSize: 15 },
   dayState: { fontFamily: fonts.bold, color: colors.muted, fontSize: 11, letterSpacing: 1 },
   footer: { fontFamily: fonts.headline, color: colors.muted, fontSize: 18, textAlign: "center", marginTop: 28 },
   safety: { fontFamily: fonts.body, color: colors.muted, fontSize: 11, lineHeight: 16, textAlign: "center", marginTop: 10 },
-});
+}),
+);

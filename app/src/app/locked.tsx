@@ -5,7 +5,7 @@ import { errorMessage } from "../api";
 import { Body, Button, ErrorText, Headline, Label, Screen } from "../components/ui";
 import { LINKS } from "../config";
 import { useSession } from "../session";
-import { colors, fonts, radius } from "../theme";
+import { fonts, radius, themed } from "../theme";
 
 const PERKS = [
   "Training plan and protein tracking",
@@ -14,6 +14,7 @@ const PERKS = [
 ];
 
 export default function Locked() {
+  const s = useS();
   const { email, recheck, signOut } = useSession();
   const [busy, setBusy] = useState(false);
   const [note, setNote] = useState<string | null>(null);
@@ -79,9 +80,10 @@ export default function Locked() {
   );
 }
 
-const s = StyleSheet.create({
+const useS = themed((colors) =>
+  StyleSheet.create({
   top: { marginTop: 24 },
-  pink: { color: colors.pink },
+  pink: { color: colors.headlinePink },
   intro: { marginTop: 16 },
   email: { fontFamily: fonts.bold, color: colors.text, fontSize: 14, marginTop: 8 },
   card: {
@@ -96,11 +98,12 @@ const s = StyleSheet.create({
   cardBody: { marginTop: 6, marginBottom: 16 },
   perksLabel: { marginTop: 32, marginBottom: 12 },
   perk: { flexDirection: "row", alignItems: "center", marginBottom: 10 },
-  dot: { width: 8, height: 8, borderRadius: 4, backgroundColor: colors.yellow, marginRight: 12 },
+  dot: { width: 8, height: 8, borderRadius: 4, backgroundColor: colors.accent, marginRight: 12 },
   perkText: { fontFamily: fonts.medium, color: colors.text, fontSize: 15, flexShrink: 1 },
   again: { marginTop: 24 },
   linkRow: { paddingVertical: 18, alignItems: "center" },
-  link: { fontFamily: fonts.bold, color: colors.yellow, fontSize: 14 },
+  link: { fontFamily: fonts.bold, color: colors.accent, fontSize: 14 },
   footer: { fontFamily: fonts.body, color: colors.muted, fontSize: 14 },
   fda: { fontFamily: fonts.body, color: colors.muted, fontSize: 11, lineHeight: 16, marginTop: 8 },
-});
+}),
+);

@@ -7,11 +7,12 @@ import { StatusBar } from "expo-status-bar";
 import { useEffect } from "react";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import { SessionProvider, useSession } from "../session";
-import { colors } from "../theme";
+import { ThemeProvider, useColors, useTheme } from "../theme";
 
 SplashScreen.preventAutoHideAsync().catch(() => {});
 
 function Routes({ fontsReady }: { fontsReady: boolean }) {
+  const colors = useColors();
   const { status } = useSession();
   const ready = fontsReady && status !== "loading";
 
@@ -38,15 +39,23 @@ function Routes({ fontsReady }: { fontsReady: boolean }) {
   );
 }
 
+/** Dark clock and battery on the pale page, light ones on the navy page. */
+function ThemedStatusBar() {
+  const { scheme } = useTheme();
+  return <StatusBar style={scheme === "light" ? "dark" : "light"} />;
+}
+
 export default function RootLayout() {
   const [loaded, error] = useFonts({ LilitaOne_400Regular, DMSans_400Regular, DMSans_500Medium, DMSans_700Bold });
   return (
     <SafeAreaProvider>
+      <ThemeProvider>
       <SessionProvider>
-        <StatusBar style="light" />
+        <ThemedStatusBar />
         {/* If fonts fail we still open the app on system fonts. */}
         <Routes fontsReady={loaded || error != null} />
       </SessionProvider>
+      </ThemeProvider>
     </SafeAreaProvider>
   );
 }

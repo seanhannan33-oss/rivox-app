@@ -3,9 +3,10 @@ import { Tabs } from "expo-router/js-tabs";
 import { useEffect } from "react";
 import { listenForPushes, pushAvailable } from "../../lib/push";
 import { DayLogProvider } from "../../lib/useDayLog";
-import { colors, fonts } from "../../theme";
+import { fonts, useColors } from "../../theme";
 
 export default function TabsLayout() {
+  const colors = useColors();
   const router = useRouter();
   // Tapping an alert opens the tab it was about.
   useEffect(() => {
@@ -29,7 +30,7 @@ export default function TabsLayout() {
     <Tabs
       screenOptions={{
         headerShown: false,
-        tabBarActiveTintColor: colors.yellow,
+        tabBarActiveTintColor: colors.accent,
         tabBarInactiveTintColor: colors.muted,
         tabBarStyle: { backgroundColor: colors.bg, borderTopColor: colors.border },
         tabBarLabelStyle: { fontFamily: fonts.headline, fontSize: 14, letterSpacing: 0.5 },

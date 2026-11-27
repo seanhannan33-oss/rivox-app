@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Alert, Image, ImageBackground, Pressable, StyleSheet, Text, View } from "react-native";
 import { Rewards } from "../../components/Rewards";
-import { Body, Button, Label, Screen } from "../../components/ui";
+import { AppearancePicker, Body, Button, Label, Screen } from "../../components/ui";
 import {
   BADGES,
   checkedIn,
@@ -17,7 +17,7 @@ import {
 import { useDayLog } from "../../lib/useDayLog";
 import { errorMessage, type ProductDetail } from "../../api";
 import { useSession } from "../../session";
-import { colors, fonts, radius } from "../../theme";
+import { fonts, onPhoto, radius, themed } from "../../theme";
 
 const HABITS = [
   { id: "sleep", label: "Slept 7 hours" },
@@ -28,6 +28,7 @@ const HABITS = [
 const MG_PER_POUCH = 60;
 
 export default function Today() {
+  const s = useS();
   const { email, access, signOut, deleteAccount } = useSession();
   const { ready, entry, streak, best, earnedToday, crowd, today, firstDay, update } = useDayLog();
   const products = access?.products ?? [];
@@ -193,6 +194,9 @@ export default function Today() {
           );
         })}
 
+        <Label style={s.section}>LOOK</Label>
+        <AppearancePicker />
+
         <View style={s.account}>
           <Text style={s.signOutText}>{email}</Text>
           <View style={s.accountRow}>
@@ -229,6 +233,7 @@ function NextBox({
   today: string;
   line: string;
 }) {
+  const s = useS();
   if (!detail) return null;
   if (detail.paused) {
     return (
@@ -250,6 +255,7 @@ function NextBox({
 }
 
 function Dose({ amount, what }: { amount: string; what: string }) {
+  const s = useS();
   return (
     <View style={s.dose}>
       <Text style={s.doseAmount}>{amount}</Text>
@@ -258,9 +264,10 @@ function Dose({ amount, what }: { amount: string; what: string }) {
   );
 }
 
-const s = StyleSheet.create({
+const useS = themed((colors) =>
+  StyleSheet.create({
   banner: { height: 104, justifyContent: "center", paddingHorizontal: 24 },
-  bannerShade: { position: "absolute", top: 0, right: 0, bottom: 0, left: 0, backgroundColor: "rgba(7,18,36,0.55)" },
+  bannerShade: { position: "absolute", top: 0, right: 0, bottom: 0, left: 0, backgroundColor: onPhoto.shade },
   logo: { width: 120, height: 42 },
   pill: {
     position: "absolute",
@@ -275,7 +282,7 @@ const s = StyleSheet.create({
   body: { paddingHorizontal: 24, paddingTop: 24 },
   dayRow: { flexDirection: "row", alignItems: "baseline", marginTop: 4, marginBottom: 8 },
   dayWord: { fontFamily: fonts.headline, color: colors.text, fontSize: 44, marginRight: 12 },
-  dayNum: { fontFamily: fonts.headline, color: colors.yellow, fontSize: 84, lineHeight: 88 },
+  dayNum: { fontFamily: fonts.headline, color: colors.accent, fontSize: 84, lineHeight: 88 },
   streak: { fontFamily: fonts.bold, color: colors.text, fontSize: 14, marginTop: 10 },
   crowd: { fontFamily: fonts.medium, color: colors.secondary, fontSize: 14, marginTop: 4 },
   earned: {
@@ -297,7 +304,7 @@ const s = StyleSheet.create({
     borderColor: colors.border,
     backgroundColor: colors.panel,
   },
-  badgeGot: { backgroundColor: colors.yellow, borderColor: colors.yellow },
+  badgeGot: { backgroundColor: colors.yellow, borderColor: colors.outline },
   badgeNum: { fontFamily: fonts.headline, color: colors.muted, fontSize: 15 },
   badgeNumGot: { color: colors.ink },
   card: {
@@ -319,7 +326,7 @@ const s = StyleSheet.create({
     justifyContent: "center",
     paddingVertical: 8,
   },
-  doneText: { fontFamily: fonts.headline, color: colors.pink, fontSize: 18 },
+  doneText: { fontFamily: fonts.headline, color: colors.alert, fontSize: 18 },
   undo: { fontFamily: fonts.body, color: colors.muted, fontSize: 12, marginTop: 2 },
   panelLabel: { marginTop: 18, marginBottom: 8 },
   panel: { flexDirection: "row", gap: 8 },
@@ -331,7 +338,7 @@ const s = StyleSheet.create({
     borderColor: colors.border,
     padding: 10,
   },
-  doseAmount: { fontFamily: fonts.headline, color: colors.yellow, fontSize: 18 },
+  doseAmount: { fontFamily: fonts.headline, color: colors.accent, fontSize: 18 },
   doseWhat: { fontFamily: fonts.bold, color: colors.secondary, fontSize: 10, letterSpacing: 0.6, marginTop: 2 },
   countRow: {
     flexDirection: "row",
@@ -341,7 +348,7 @@ const s = StyleSheet.create({
     marginBottom: 14,
   },
   count: { fontFamily: fonts.headline, color: colors.text, fontSize: 36 },
-  mg: { fontFamily: fonts.bold, color: colors.yellow, fontSize: 15 },
+  mg: { fontFamily: fonts.bold, color: colors.accent, fontSize: 15 },
   minus: { alignItems: "center", paddingTop: 12, paddingBottom: 2 },
   note: { fontFamily: fonts.body, color: colors.secondary, fontSize: 13, textAlign: "center", marginTop: 12 },
   nextBox: {
@@ -368,13 +375,14 @@ const s = StyleSheet.create({
     paddingHorizontal: 16,
     marginBottom: 8,
   },
-  habitOn: { borderColor: colors.yellow },
+  habitOn: { borderColor: colors.outline },
   habitText: { fontFamily: fonts.medium, color: colors.text, fontSize: 15, flexShrink: 1 },
   habitState: { fontFamily: fonts.bold, color: colors.muted, fontSize: 11, letterSpacing: 1, marginLeft: 12 },
-  habitStateOn: { color: colors.yellow },
+  habitStateOn: { color: colors.accent },
   account: { alignItems: "center", paddingVertical: 24 },
   accountRow: { flexDirection: "row", alignItems: "center", gap: 10, marginTop: 6 },
   accountLink: { fontFamily: fonts.bold, color: colors.muted, fontSize: 13, textDecorationLine: "underline" },
   signOutText: { fontFamily: fonts.body, color: colors.muted, fontSize: 13 },
   fda: { fontFamily: fonts.body, color: colors.muted, fontSize: 11, lineHeight: 16 },
-});
+}),
+);

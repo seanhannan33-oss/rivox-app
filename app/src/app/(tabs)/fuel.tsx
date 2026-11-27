@@ -17,11 +17,12 @@ import { getMealPhoto } from "../../lib/photo";
 import { useDayLog } from "../../lib/useDayLog";
 import { useFuel } from "../../lib/useFuel";
 import { useSession } from "../../session";
-import { colors, fonts, radius } from "../../theme";
+import { fonts, onPhoto, radius, themed, useColors } from "../../theme";
 
 const QUICK = [10, 20, 30, 40];
 
 export default function Fuel() {
+  const s = useS();
   const { email, token, access, signOut } = useSession();
   const { today, entry: dayEntry } = useDayLog();
   const { ready, profile, entries, setProfile, add, remove } = useFuel(email, today);
@@ -227,6 +228,8 @@ function WeightCard({
   onSave: (weight: number, unit: Unit) => void;
   onCancel?: () => void;
 }) {
+  const s = useS();
+  const colors = useColors();
   const [text, setText] = useState(initial ? String(initial.weight) : "");
   const [unit, setUnit] = useState<Unit>(initial?.unit ?? "lb");
   const [error, setError] = useState<string | null>(null);
@@ -283,6 +286,7 @@ function WeightCard({
 }
 
 function Round({ sign, label, onPress }: { sign: string; label: string; onPress: () => void }) {
+  const s = useS();
   return (
     <Pressable onPress={onPress} accessibilityRole="button" accessibilityLabel={`${label} protein`} hitSlop={8} style={s.round}>
       <Text style={s.roundText}>{sign}</Text>
@@ -290,9 +294,10 @@ function Round({ sign, label, onPress }: { sign: string; label: string; onPress:
   );
 }
 
-const s = StyleSheet.create({
+const useS = themed((colors) =>
+  StyleSheet.create({
   banner: { height: 104, justifyContent: "center", paddingHorizontal: 24 },
-  bannerShade: { position: "absolute", top: 0, right: 0, bottom: 0, left: 0, backgroundColor: "rgba(7,18,36,0.55)" },
+  bannerShade: { position: "absolute", top: 0, right: 0, bottom: 0, left: 0, backgroundColor: onPhoto.shade },
   logo: { width: 120, height: 42 },
   pill: {
     position: "absolute",
@@ -306,10 +311,10 @@ const s = StyleSheet.create({
   pillText: { fontFamily: fonts.bold, color: colors.ink, fontSize: 11, letterSpacing: 1 },
   body: { paddingHorizontal: 24, paddingTop: 24 },
   h1: { fontFamily: fonts.headline, color: colors.text, fontSize: 52, lineHeight: 54 },
-  yellow: { color: colors.yellow },
+  yellow: { color: colors.accent },
   intro: { marginTop: 10 },
   totalRow: { flexDirection: "row", alignItems: "baseline", marginTop: 20 },
-  total: { fontFamily: fonts.headline, color: colors.yellow, fontSize: 84, lineHeight: 88 },
+  total: { fontFamily: fonts.headline, color: colors.accent, fontSize: 84, lineHeight: 88 },
   target: { fontFamily: fonts.headline, color: colors.text, fontSize: 28, marginLeft: 10 },
   status: { fontFamily: fonts.bold, color: colors.text, fontSize: 15 },
   bar: { flexDirection: "row", gap: 6, marginTop: 16, marginBottom: 20 },
@@ -322,20 +327,20 @@ const s = StyleSheet.create({
     borderRadius: radius.sm,
     paddingVertical: 10,
   },
-  segOn: { backgroundColor: colors.yellow, borderColor: colors.yellow },
+  segOn: { backgroundColor: colors.yellow, borderColor: colors.outline },
   segName: { fontFamily: fonts.bold, color: colors.muted, fontSize: 9, letterSpacing: 0.6 },
   segNum: { fontFamily: fonts.headline, color: colors.muted, fontSize: 20, marginTop: 2 },
   segTextOn: { color: colors.ink },
   pending: {
     backgroundColor: colors.panel,
     borderWidth: 2,
-    borderColor: colors.yellow,
+    borderColor: colors.outline,
     borderRadius: radius.md,
     padding: 18,
   },
   pendingLabel: { fontFamily: fonts.headline, color: colors.text, fontSize: 22, marginTop: 6 },
   adjust: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 24, marginVertical: 14 },
-  pendingGrams: { fontFamily: fonts.headline, color: colors.yellow, fontSize: 48, minWidth: 130, textAlign: "center" },
+  pendingGrams: { fontFamily: fonts.headline, color: colors.accent, fontSize: 48, minWidth: 130, textAlign: "center" },
   round: {
     width: 48,
     height: 48,
@@ -348,7 +353,7 @@ const s = StyleSheet.create({
   roundText: { fontFamily: fonts.headline, color: colors.text, fontSize: 26, lineHeight: 30 },
   hint: { fontFamily: fonts.body, color: colors.muted, fontSize: 12, textAlign: "center", marginBottom: 14 },
   linkRow: { alignItems: "center", paddingVertical: 14 },
-  link: { fontFamily: fonts.bold, color: colors.yellow, fontSize: 14 },
+  link: { fontFamily: fonts.bold, color: colors.accent, fontSize: 14 },
   muted: { fontFamily: fonts.body, color: colors.muted, fontSize: 13, textAlign: "center" },
   section: { marginTop: 24, marginBottom: 10 },
   quick: { flexDirection: "row", gap: 8 },
@@ -359,9 +364,9 @@ const s = StyleSheet.create({
     justifyContent: "center",
     borderRadius: radius.sm,
     borderWidth: 2,
-    borderColor: colors.yellow,
+    borderColor: colors.outline,
   },
-  quickText: { fontFamily: fonts.headline, color: colors.yellow, fontSize: 16 },
+  quickText: { fontFamily: fonts.headline, color: colors.accent, fontSize: 16 },
   pressed: { transform: [{ scale: 0.97 }] },
   row: {
     flexDirection: "row",
@@ -379,7 +384,7 @@ const s = StyleSheet.create({
   rowTitle: { fontFamily: fonts.medium, color: colors.text, fontSize: 15 },
   rowSub: { fontFamily: fonts.body, color: colors.muted, fontSize: 12, marginTop: 2 },
   rowState: { fontFamily: fonts.bold, color: colors.muted, fontSize: 11, letterSpacing: 1 },
-  rowGrams: { fontFamily: fonts.headline, color: colors.yellow, fontSize: 18 },
+  rowGrams: { fontFamily: fonts.headline, color: colors.accent, fontSize: 18 },
   x: { marginLeft: 12, width: 28, height: 28, alignItems: "center", justifyContent: "center" },
   xText: { fontFamily: fonts.bold, color: colors.muted, fontSize: 22, lineHeight: 24 },
   empty: { marginBottom: 8 },
@@ -411,7 +416,8 @@ const s = StyleSheet.create({
   unitOn: { backgroundColor: colors.yellow },
   unitText: { fontFamily: fonts.headline, color: colors.muted, fontSize: 16 },
   unitTextOn: { color: colors.ink },
-  preview: { fontFamily: fonts.bold, color: colors.yellow, fontSize: 14, marginTop: 12 },
+  preview: { fontFamily: fonts.bold, color: colors.accent, fontSize: 14, marginTop: 12 },
   gap: { marginTop: 16 },
   fine: { fontFamily: fonts.body, color: colors.muted, fontSize: 11, lineHeight: 16, marginTop: 12 },
-});
+}),
+);

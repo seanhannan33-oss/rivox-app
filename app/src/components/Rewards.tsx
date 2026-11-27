@@ -5,11 +5,12 @@ import { errorMessage, fetchRewards, redeemReward, type RewardsView } from "../a
 import { nextReward, tagLink } from "../lib/days";
 import { useDayLog } from "../lib/useDayLog";
 import { useSession } from "../session";
-import { colors, fonts, radius } from "../theme";
+import { fonts, radius, themed } from "../theme";
 import { Button, Label } from "./ui";
 
 /** Points earned by checking in, what they buy, and the codes already claimed. */
 export function Rewards() {
+  const s = useS();
   const { token } = useSession();
   const { points: livePoints } = useDayLog();
   const [view, setView] = useState<RewardsView | null>(null);
@@ -130,7 +131,8 @@ export function Rewards() {
   );
 }
 
-const s = StyleSheet.create({
+const useS = themed((colors) =>
+  StyleSheet.create({
   card: {
     backgroundColor: colors.panel,
     borderWidth: 1,
@@ -140,7 +142,7 @@ const s = StyleSheet.create({
     marginTop: 24,
   },
   top: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginTop: 2 },
-  points: { fontFamily: fonts.headline, color: colors.yellow, fontSize: 56, lineHeight: 60 },
+  points: { fontFamily: fonts.headline, color: colors.accent, fontSize: 56, lineHeight: 60 },
   earn: { fontFamily: fonts.body, color: colors.secondary, fontSize: 13, lineHeight: 18, textAlign: "right" },
   track: { height: 10, borderRadius: 5, backgroundColor: colors.bg, overflow: "hidden", marginTop: 10 },
   fill: { height: 10, borderRadius: 5, backgroundColor: colors.yellow },
@@ -158,21 +160,22 @@ const s = StyleSheet.create({
   rewardBlurb: { fontFamily: fonts.body, color: colors.secondary, fontSize: 13, marginTop: 2 },
   rewardBtn: { minWidth: 110 },
   cost: { fontFamily: fonts.headline, color: colors.muted, fontSize: 16 },
-  costReady: { color: colors.yellow },
+  costReady: { color: colors.accent },
   hint: { fontFamily: fonts.body, color: colors.muted, fontSize: 12, marginTop: 12 },
-  note: { fontFamily: fonts.medium, color: colors.yellow, fontSize: 13, marginTop: 12 },
+  note: { fontFamily: fonts.medium, color: colors.accent, fontSize: 13, marginTop: 12 },
   claimedLabel: { marginTop: 20, marginBottom: 8 },
   claimed: {
     flexDirection: "row",
     alignItems: "center",
     backgroundColor: colors.bg,
     borderWidth: 1,
-    borderColor: colors.yellow,
+    borderColor: colors.outline,
     borderRadius: radius.sm,
     padding: 12,
     marginBottom: 8,
   },
-  code: { fontFamily: fonts.bold, color: colors.yellow, fontSize: 14, letterSpacing: 1, marginTop: 2 },
-  use: { fontFamily: fonts.headline, color: colors.yellow, fontSize: 16 },
+  code: { fontFamily: fonts.bold, color: colors.accent, fontSize: 14, letterSpacing: 1, marginTop: 2 },
+  use: { fontFamily: fonts.headline, color: colors.accent, fontSize: 16 },
   pressed: { transform: [{ scale: 0.98 }] },
-});
+}),
+);
