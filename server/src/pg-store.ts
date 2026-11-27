@@ -62,6 +62,13 @@ export class PostgresStore implements Store {
         PRIMARY KEY (email, day)
       )`);
     await this.db.query("CREATE INDEX IF NOT EXISTS checkins_day ON checkins (day)");
+    await this.db.query(`
+      CREATE TABLE IF NOT EXISTS push_tokens (
+        token      text PRIMARY KEY,
+        email      text NOT NULL,
+        platform   text NOT NULL,
+        updated_at bigint NOT NULL
+      )`);
   }
 
   async getCode(email: string): Promise<StoredCode | undefined> {
@@ -167,8 +174,25 @@ export class PostgresStore implements Store {
     return Number(rows[0]?.n ?? 0);
   }
 
+  async putPushToken(email: string, token: string, platform: string, now: number): Promise<void> {
+    await this.db.query(
+      `INSERT INTO push_tokens (token, email, platform, updated_at) VALUES ($1, $2, $3, $4)
+       ON CONFLICT (token) DO UPDATE SET email = EXCLUDED.email, platform = EXCLUDED.platform, updated_at = EXCLUDED.updated_at`,
+      [token, email, platform, now],
+    );
+  }
+
+  async deletePushToken(token: string): Promise<void> {
+    await this.db.query("DELETE FROM push_tokens WHERE token = $1", [token]);
+  }
+
+  async listPushTokens(): Promise<{ email: string; token: string }[]> {
+    const { rows } = await this.db.query("SELECT email, token FROM push_tokens ORDER BY email");
+    return rows.map((r) => ({ email: String(r.email), token: String(r.token) }));
+  }
+
   async deleteMemberData(email: string): Promise<void> {
-    for (const table of ["sign_in_codes", "members", "usage_counts", "sync_docs", "checkins"]) {
+    for (const table of ["sign_in_codes", "members", "usage_counts", "sync_docs", "checkins", "push_tokens"]) {
       await this.db.query(`DELETE FROM ${table} WHERE email = $1`, [email]);
     }
   }

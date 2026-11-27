@@ -30,6 +30,10 @@ export interface Store {
   setCheckin(email: string, day: string, done: boolean): Promise<void>;
   /** How many members checked in on a day. */
   countCheckins(day: string): Promise<number>;
+  /** Push: which phones belong to which member. A token moves to whoever registered it last. */
+  putPushToken(email: string, token: string, platform: string, now: number): Promise<void>;
+  deletePushToken(token: string): Promise<void>;
+  listPushTokens(): Promise<{ email: string; token: string }[]>;
   /** Removes everything held about one email. Used by account deletion. */
   deleteMemberData(email: string): Promise<void>;
 }
@@ -41,6 +45,7 @@ export class MemoryStore implements Store {
   private usage = new Map<string, number>();
   private sync = new Map<string, unknown>();
   private checkins = new Map<string, Set<string>>();
+  private pushTokens = new Map<string, string>(); // token -> email
 
   async getCode(email: string) {
     return this.codes.get(email);
@@ -90,7 +95,17 @@ export class MemoryStore implements Store {
   async countCheckins(day: string) {
     return this.checkins.get(day)?.size ?? 0;
   }
+  async putPushToken(email: string, token: string) {
+    this.pushTokens.set(token, email);
+  }
+  async deletePushToken(token: string) {
+    this.pushTokens.delete(token);
+  }
+  async listPushTokens() {
+    return [...this.pushTokens].map(([token, email]) => ({ email, token }));
+  }
   async deleteMemberData(email: string) {
+    for (const [token, owner] of [...this.pushTokens]) if (owner === email) this.pushTokens.delete(token);
     for (const set of this.checkins.values()) set.delete(email);
     this.codes.delete(email);
     this.members.delete(email);

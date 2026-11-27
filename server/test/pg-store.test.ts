@@ -114,3 +114,16 @@ test("check-ins: one per member per day, countable, undoable, wiped with the mem
   assert.equal(await store.countCheckins("2026-11-27"), 0);
   assert.equal(await store.countCheckins("2026-11-26"), 0);
 });
+
+test("push tokens: register, move to a new owner, list, remove, wiped with the member", { skip }, async () => {
+  await pool.query("TRUNCATE push_tokens");
+  await store.putPushToken("a@b.co", "T1", "ios", 1);
+  await store.putPushToken("a@b.co", "T2", "android", 1);
+  await store.putPushToken("c@b.co", "T3", "ios", 1);
+  await store.putPushToken("c@b.co", "T1", "ios", 2); // same phone, new sign-in
+  const all = (await store.listPushTokens()).map((t) => `${t.email}:${t.token}`).sort();
+  assert.deepEqual(all, ["a@b.co:T2", "c@b.co:T1", "c@b.co:T3"]);
+  await store.deletePushToken("T3");
+  await store.deleteMemberData("a@b.co");
+  assert.deepEqual(await store.listPushTokens(), [{ email: "c@b.co", token: "T1" }]);
+});

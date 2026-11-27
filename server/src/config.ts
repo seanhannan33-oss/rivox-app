@@ -28,6 +28,8 @@ export interface Config {
   trustedProxyHops: number;
   /** Sign-in codes one email can be sent per day. */
   codeDailyLimit: number;
+  /** Optional token for Expo's push service. Only needed with enhanced security on. */
+  expoAccessToken: string;
 }
 
 function list(value: string | undefined): string[] {
@@ -72,5 +74,6 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
     photoDailyLimit: Math.max(1, Number(env.PHOTO_DAILY_LIMIT ?? 12) || 12),
     trustedProxyHops: Math.max(1, Number(env.TRUSTED_PROXY_HOPS ?? 1) || 1),
     codeDailyLimit: Math.max(1, Number(env.CODE_DAILY_LIMIT ?? 10) || 10),
+    expoAccessToken: (env.EXPO_ACCESS_TOKEN ?? "").trim(),
   };
 }

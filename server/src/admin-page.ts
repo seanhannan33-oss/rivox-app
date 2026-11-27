@@ -89,6 +89,10 @@ export const ADMIN_PAGE = String.raw`<!doctype html>
       <div><label for="startsAt">STARTS (blank = now)</label><input id="startsAt" type="datetime-local"></div>
       <div><label for="endsAt">ENDS (blank = until removed)</label><input id="endsAt" type="datetime-local"></div>
     </div>
+    <label style="display:flex;align-items:center;gap:10px;margin-top:20px;letter-spacing:0;font-size:15px;color:#fff;font-weight:600">
+      <input id="alsoPush" type="checkbox" style="width:22px;height:22px;flex:none"> Also send a push about it
+    </label>
+    <p class="hint">Sends the headline and details to the phones of everyone who sees this drop. Goes out when you post, so leave it off for a scheduled drop.</p>
     <button class="primary" id="save">POST IT</button>
     <button class="ghost" id="cancel" hidden style="width:100%;margin-top:8px">CANCEL EDIT</button>
     <p class="msg" id="formMsg" role="status"></p>
@@ -96,6 +100,20 @@ export const ADMIN_PAGE = String.raw`<!doctype html>
     <h2>Posted</h2>
     <div id="list"></div>
     <p class="hint" id="empty" hidden>Nothing posted yet.</p>
+
+    <h2>Send a push</h2>
+    <p class="sub">Straight to members' lock screens. Use it like you mean it.</p>
+    <label for="pAudience">WHO GETS IT</label>
+    <select id="pAudience"><option value="all">Every member</option><option value="no_curfew">No Curfew subscribers</option><option value="pouches">Pouch subscribers</option></select>
+    <label for="pTitle">TITLE (50 max)</label>
+    <input id="pTitle" maxlength="50">
+    <label for="pBody">MESSAGE (150 max)</label>
+    <textarea id="pBody" maxlength="150"></textarea>
+    <label for="pTab">A TAP OPENS</label>
+    <select id="pTab"><option value="drops">Drops</option><option value="today">Today</option></select>
+    <button class="primary" id="pSend">CHECK WHO GETS IT</button>
+    <button class="ghost" id="pCancel" hidden style="width:100%;margin-top:8px">CANCEL</button>
+    <p class="msg" id="pMsg" role="status"></p>
     <p class="hint" id="whoami" style="margin-top:32px"></p>
   </section>
 </main>
@@ -172,6 +190,7 @@ export const ADMIN_PAGE = String.raw`<!doctype html>
     ["title", "body", "code", "path", "url", "startsAt", "endsAt"].forEach(function (id) { $(id).value = ""; });
     $("cta").value = "CLAIM IT"; $("kind").value = "deal"; $("audience").value = "all";
     $("formTitle").textContent = "New drop"; $("save").textContent = "POST IT"; $("cancel").hidden = true;
+    $("alsoPush").checked = false; $("alsoPush").disabled = false;
   }
 
   function startEdit(d) {
@@ -180,6 +199,7 @@ export const ADMIN_PAGE = String.raw`<!doctype html>
     $("cta").value = d.cta; $("url").value = d.url; $("code").value = ""; $("path").value = "";
     $("startsAt").value = toLocalInput(d.startsAt); $("endsAt").value = toLocalInput(d.endsAt);
     $("formTitle").textContent = "Edit drop"; $("save").textContent = "SAVE CHANGES"; $("cancel").hidden = false;
+    $("alsoPush").checked = false; $("alsoPush").disabled = true;
     say("formMsg", "", true);
     window.scrollTo({ top: 0, behavior: "smooth" });
   }
@@ -214,6 +234,35 @@ export const ADMIN_PAGE = String.raw`<!doctype html>
 
   $("cancel").onclick = function () { reset(); say("formMsg", "", true); };
 
+  // Push: first tap counts the phones, second tap sends. Editing anything resets it.
+  var pushArmed = false;
+  function pushBody() {
+    return { title: $("pTitle").value, body: $("pBody").value, audience: $("pAudience").value, tab: $("pTab").value };
+  }
+  function disarm() { pushArmed = false; $("pSend").textContent = "CHECK WHO GETS IT"; $("pCancel").hidden = true; }
+  ["pTitle", "pBody", "pAudience", "pTab"].forEach(function (id) { $(id).addEventListener("input", disarm); });
+  $("pCancel").onclick = function () { disarm(); say("pMsg", "", true); };
+  $("pSend").onclick = function () {
+    var body = pushBody();
+    $("pSend").disabled = true;
+    if (!pushArmed) {
+      body.preview = true;
+      api("POST", "/admin/push", body).then(function (r) {
+        if (r.phones === 0) { say("pMsg", "No phones would get this. Nobody in that group has alerts on yet.", false); return; }
+        pushArmed = true;
+        $("pSend").textContent = "SEND TO " + r.phones + (r.phones === 1 ? " PHONE" : " PHONES"); $("pCancel").hidden = false;
+        say("pMsg", "This can't be unsent.", true);
+      }).catch(function (e) { say("pMsg", e.message, false); })
+        .finally(function () { $("pSend").disabled = false; });
+      return;
+    }
+    api("POST", "/admin/push", body).then(function (r) {
+      disarm(); $("pTitle").value = ""; $("pBody").value = "";
+      say("pMsg", "Sent to " + r.sent + (r.sent === 1 ? " phone" : " phones") + (r.failed ? ". " + r.failed + " failed." : "."), r.failed === 0);
+    }).catch(function (e) { say("pMsg", e.message, false); })
+      .finally(function () { $("pSend").disabled = false; });
+  };
+
   $("save").onclick = function () {
     var body = {
       kind: $("kind").value, audience: $("audience").value, title: $("title").value, body: $("body").value,
@@ -223,7 +272,16 @@ export const ADMIN_PAGE = String.raw`<!doctype html>
     $("save").disabled = true;
     var wasEdit = editing;
     (wasEdit ? api("PUT", "/admin/drops/" + encodeURIComponent(wasEdit), body) : api("POST", "/admin/drops", body))
-      .then(function () { reset(); say("formMsg", wasEdit ? "Saved." : "Posted. Members see it now, or when it starts.", true); return load(); })
+      .then(function () {
+        var push = !wasEdit && $("alsoPush").checked;
+        reset();
+        say("formMsg", wasEdit ? "Saved." : "Posted. Members see it now, or when it starts.", true);
+        if (!push) return load();
+        return api("POST", "/admin/push", { title: body.title.slice(0, 50), body: body.body.slice(0, 150), audience: body.audience, tab: "drops" })
+          .then(function (r) { say("formMsg", "Posted, and pushed to " + r.sent + (r.sent === 1 ? " phone." : " phones."), true); })
+          .catch(function (e) { say("formMsg", "Posted, but the push failed: " + e.message, false); })
+          .then(load);
+      })
       .catch(function (e) { say("formMsg", e.message, false); })
       .finally(function () { $("save").disabled = false; });
   };

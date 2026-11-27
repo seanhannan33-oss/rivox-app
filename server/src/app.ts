@@ -16,6 +16,7 @@ import type { EmailSender } from "./email.ts";
 import type { LoopClient } from "./loop.ts";
 import { createSession, readSession } from "./session.ts";
 import { WindowLimiter, clientIp, forwardedCount } from "./limits.ts";
+import { inAudience, isPushToken, parsePush, type PushSender } from "./push.ts";
 import type { Store } from "./store.ts";
 import { MAX_IMAGE_BASE64, MEDIA_TYPES, type MealEstimator } from "./vision.ts";
 
@@ -29,6 +30,7 @@ export interface Deps {
   email: EmailSender;
   /** Missing when the meal photo feature is switched off. */
   meals?: MealEstimator;
+  push: PushSender;
   now?: () => number;
 }
 
@@ -199,6 +201,30 @@ export function createApp(deps: Deps) {
     return c.json({ count: await store.countCheckins(body.day) });
   });
 
+  // A phone signing up for alerts. The member chose this in the app: nothing is registered without a tap.
+  app.post("/push/register", async (c) => {
+    const address = sessionEmail(c);
+    if (!address) return c.json({ error: "unauthorized" }, 401);
+    const member = await store.getMember(address);
+    if (!member || !member.access.allowed) return c.json({ error: "members_only" }, 403);
+    const body = (await c.req.json().catch(() => null)) as { token?: unknown; platform?: unknown } | null;
+    if (!isPushToken(body?.token)) return c.json({ error: "invalid_request" }, 400);
+    const platform = body?.platform === "android" ? "android" : "ios";
+    await store.putPushToken(address, body.token, platform, now());
+    return c.json({ ok: true });
+  });
+
+  // Turning alerts off, or signing out of that phone.
+  app.post("/push/unregister", async (c) => {
+    const address = sessionEmail(c);
+    if (!address) return c.json({ error: "unauthorized" }, 401);
+    const body = (await c.req.json().catch(() => null)) as { token?: unknown } | null;
+    if (!isPushToken(body?.token)) return c.json({ error: "invalid_request" }, 400);
+    const mine = (await store.listPushTokens()).some((t) => t.token === body.token && t.email === address);
+    if (mine) await store.deletePushToken(body.token);
+    return c.json({ ok: true });
+  });
+
   // Account deletion. Wipes everything we hold for this email. It does not touch
   // their Rivox subscription, which lives in Loop and Shopify.
   app.delete("/me", async (c) => {
@@ -304,6 +330,40 @@ export function createApp(deps: Deps) {
     if (!isAdmin(c)) return c.json({ error: "unauthorized" }, 401);
     await store.deleteDrop(c.req.param("id"));
     return c.json({ ok: true });
+  });
+
+  // Who a push would reach right now. People whose access hasn't been checked in a
+  // day are re-checked first, so someone who cancelled doesn't keep getting alerts.
+  const PUSH_RECHECK_MS = 24 * 60 * 60 * 1000;
+  async function pushTargets(audience: Parameters<typeof inAudience>[1]): Promise<string[]> {
+    const tokens = await store.listPushTokens();
+    const accessByEmail = new Map<string, Awaited<ReturnType<typeof store.getMember>>>();
+    for (const address of new Set(tokens.map((t) => t.email))) {
+      let member = await store.getMember(address);
+      if (member && now() - member.checkedAt > PUSH_RECHECK_MS) {
+        try {
+          member = { email: address, access: await refreshAccess(address), checkedAt: now() };
+        } catch {
+          // Loop is down: go with what we last knew.
+        }
+      }
+      accessByEmail.set(address, member);
+    }
+    return tokens.filter((t) => inAudience(accessByEmail.get(t.email)?.access, audience)).map((t) => t.token);
+  }
+
+  // Send a push to members. "preview: true" only counts the phones, so the admin sees the number before sending.
+  app.post("/admin/push", async (c) => {
+    if (!isAdmin(c)) return c.json({ error: "unauthorized" }, 401);
+    const raw = (await c.req.json().catch(() => null)) as Record<string, unknown> | null;
+    const parsed = parsePush(raw);
+    if (!parsed.ok) return c.json({ error: "invalid_push", message: parsed.error }, 400);
+    const targets = await pushTargets(parsed.audience);
+    if (raw?.preview === true) return c.json({ phones: targets.length });
+    const result = await deps.push.send(targets, parsed.message);
+    for (const token of result.dead) await store.deletePushToken(token);
+    console.log(`Push sent: ${result.sent} ok, ${result.failed} failed, ${result.dead.length} dead tokens removed.`);
+    return c.json({ phones: targets.length, sent: result.sent, failed: result.failed });
   });
 
   // Loop calls this when a subscription is paused, resumed or cancelled.

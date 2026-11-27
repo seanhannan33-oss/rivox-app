@@ -4,6 +4,7 @@ import { loadConfig } from "./config.ts";
 import { ConsoleEmailSender, ResendEmailSender, type EmailSender } from "./email.ts";
 import { HttpLoopClient } from "./loop.ts";
 import { PostgresStore, createPool } from "./pg-store.ts";
+import { ExpoPushSender } from "./push.ts";
 import { MemoryStore, type Store } from "./store.ts";
 import { AnthropicMealEstimator, type MealEstimator } from "./vision.ts";
 
@@ -41,7 +42,7 @@ if (config.anthropicApiKey) {
   console.warn("Meal photos: off. Set ANTHROPIC_API_KEY to switch them on.");
 }
 
-const app = createApp({ config, store, loop: new HttpLoopClient(config.loop), email, meals });
+const app = createApp({ config, store, loop: new HttpLoopClient(config.loop), email, meals, push: new ExpoPushSender(config.expoAccessToken) });
 
 serve({ fetch: app.fetch, port: config.port }, (info) => {
   console.log(`Rivox app server listening on port ${info.port}`);

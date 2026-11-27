@@ -5,6 +5,7 @@ import { ACCESS_FRESH_MS, createApp } from "../src/app.ts";
 import { CODE_TTL_MS, MAX_ATTEMPTS } from "../src/codes.ts";
 import type { Config } from "../src/config.ts";
 import { MemoryStore } from "../src/store.ts";
+import type { PushMessage } from "../src/push.ts";
 import type { MealEstimator } from "../src/vision.ts";
 
 const config: Config = {
@@ -31,16 +32,25 @@ const config: Config = {
   photoDailyLimit: 2,
   trustedProxyHops: 1,
   codeDailyLimit: 4,
+  expoAccessToken: "",
 };
 
 function setup(subsByEmail: Record<string, Subscription[]> = {}, meals?: MealEstimator) {
   const sent: { to: string; code: string }[] = [];
+  const pushed: { tokens: string[]; message: PushMessage }[] = [];
   const clock = { t: 1_800_000_000_000 };
   const loopState = { subs: subsByEmail, fail: false, calls: 0 };
   const app = createApp({
     config,
     store: new MemoryStore(),
     meals,
+    push: {
+      send: async (tokens, message) => {
+        pushed.push({ tokens, message });
+        const dead = tokens.filter((t) => t.includes("DEAD"));
+        return { sent: tokens.length - dead.length, failed: dead.length, dead };
+      },
+    },
     now: () => clock.t,
     email: { sendCode: async (to, code) => void sent.push({ to, code }) },
     loop: {
@@ -63,7 +73,7 @@ function setup(subsByEmail: Record<string, Subscription[]> = {}, meals?: MealEst
     const res = await post("/auth/verify", { email, code });
     return { res, body: (await res.json()) as any };
   };
-  return { app, post, signIn, sent, clock, loopState };
+  return { app, post, signIn, sent, pushed, clock, loopState };
 }
 
 const active = (productId: string): Subscription => ({
@@ -509,4 +519,88 @@ test("deleting an account removes its check-in from the count", async () => {
   assert.equal(await check(b, true), 2);
   await app.request("/me", { method: "DELETE", headers: a });
   assert.equal(await check(b, true), 1);
+});
+
+// ---- Push ----
+
+const tok = (name: string) => `ExponentPushToken[${name}xxxxxxxxxx]`;
+
+test("phones register for alerts, and a push reaches only the right members", async () => {
+  const { post, signIn, pushed } = setup({
+    "nc@example.com": [active("111")],
+    "pouch@example.com": [active("222")],
+    "both@example.com": [active("111"), active("222")],
+    "none@example.com": [],
+  });
+  const auth: Record<string, { Authorization: string }> = {};
+  for (const email of ["nc@example.com", "pouch@example.com", "both@example.com", "none@example.com"]) {
+    auth[email] = { Authorization: `Bearer ${(await signIn(email)).body.token}` };
+  }
+  assert.equal((await post("/push/register", { token: tok("nc"), platform: "ios" }, auth["nc@example.com"])).status, 200);
+  assert.equal((await post("/push/register", { token: tok("pouch"), platform: "android" }, auth["pouch@example.com"])).status, 200);
+  assert.equal((await post("/push/register", { token: tok("both") }, auth["both@example.com"])).status, 200);
+  assert.equal((await post("/push/register", { token: tok("none") }, auth["none@example.com"])).status, 403);
+  assert.equal((await post("/push/register", { token: "not-a-token" }, auth["nc@example.com"])).status, 400);
+  assert.equal((await post("/push/register", { token: tok("x") })).status, 401);
+
+  const msg = { title: "New flavor", body: "Sour Apple. First tins are yours." };
+  const preview = await post("/admin/push", { ...msg, audience: "pouches", preview: true }, ADMIN);
+  assert.deepEqual(await preview.json(), { phones: 2 });
+  assert.equal(pushed.length, 0); // a preview sends nothing
+
+  const sent = await post("/admin/push", { ...msg, audience: "pouches" }, ADMIN);
+  assert.deepEqual(await sent.json(), { phones: 2, sent: 2, failed: 0 });
+  assert.deepEqual(pushed[0]!.tokens.sort(), [tok("both"), tok("pouch")].sort());
+  assert.deepEqual(pushed[0]!.message, { ...msg, tab: "drops" });
+
+  await post("/admin/push", { ...msg, audience: "all" }, ADMIN);
+  assert.equal(pushed[1]!.tokens.length, 3);
+});
+
+test("push needs the admin token and a real message", async () => {
+  const { post } = setup();
+  assert.equal((await post("/admin/push", { title: "t", body: "b", audience: "all" })).status, 401);
+  assert.equal((await post("/admin/push", { title: "", body: "b", audience: "all" }, ADMIN)).status, 400);
+  assert.equal((await post("/admin/push", { title: "t", body: "x".repeat(151), audience: "all" }, ADMIN)).status, 400);
+  assert.equal((await post("/admin/push", { title: "t", body: "b", audience: "everyone" }, ADMIN)).status, 400);
+});
+
+test("dead tokens are forgotten, and a phone can turn alerts off", async () => {
+  const { post, signIn, pushed } = setup({ "nc@example.com": [active("111")], "b@example.com": [active("111")] });
+  const a = { Authorization: `Bearer ${(await signIn("nc@example.com")).body.token}` };
+  const b = { Authorization: `Bearer ${(await signIn("b@example.com")).body.token}` };
+  await post("/push/register", { token: tok("DEAD") }, a);
+  await post("/push/register", { token: tok("live") }, a);
+  await post("/push/register", { token: tok("bphone") }, b);
+  const msg = { title: "t", body: "b", audience: "all" };
+  assert.deepEqual(await (await post("/admin/push", msg, ADMIN)).json(), { phones: 3, sent: 2, failed: 1 });
+  assert.deepEqual(await (await post("/admin/push", { ...msg, preview: true }, ADMIN)).json(), { phones: 2 });
+
+  // b can't switch off a's phone, but a can.
+  await post("/push/unregister", { token: tok("live") }, b);
+  assert.deepEqual(await (await post("/admin/push", { ...msg, preview: true }, ADMIN)).json(), { phones: 2 });
+  await post("/push/unregister", { token: tok("live") }, a);
+  assert.deepEqual(await (await post("/admin/push", { ...msg, preview: true }, ADMIN)).json(), { phones: 1 });
+  assert.ok(pushed.length >= 1);
+});
+
+test("someone who cancelled stops getting pushes once their access is re-checked", async () => {
+  const { post, signIn, clock, loopState } = setup({ "nc@example.com": [active("111")] });
+  const a = { Authorization: `Bearer ${(await signIn("nc@example.com")).body.token}` };
+  await post("/push/register", { token: tok("nc") }, a);
+  const msg = { title: "t", body: "b", audience: "all", preview: true };
+  assert.deepEqual(await (await post("/admin/push", msg, ADMIN)).json(), { phones: 1 });
+  loopState.subs["nc@example.com"] = []; // they cancel
+  assert.deepEqual(await (await post("/admin/push", msg, ADMIN)).json(), { phones: 1 }); // checked recently, still trusted
+  clock.t += 25 * 3_600_000;
+  assert.deepEqual(await (await post("/admin/push", msg, ADMIN)).json(), { phones: 0 });
+});
+
+test("deleting an account removes its phones", async () => {
+  const { app, post, signIn } = setup({ "nc@example.com": [active("111")] });
+  const a = { Authorization: `Bearer ${(await signIn("nc@example.com")).body.token}` };
+  await post("/push/register", { token: tok("nc") }, a);
+  await app.request("/me", { method: "DELETE", headers: a });
+  const res = await post("/admin/push", { title: "t", body: "b", audience: "all", preview: true }, ADMIN);
+  assert.deepEqual(await res.json(), { phones: 0 });
 });
