@@ -7,10 +7,12 @@ import {
   daysBetween,
   daysUntil,
   earliestStart,
+  endsLabel,
   inDays,
   nextBadge,
   prune,
   streak,
+  tagLink,
   toggleHabit,
 } from "./days.ts";
 
@@ -72,4 +74,27 @@ test("inDays wording", () => {
   assert.equal(inDays(0), "TODAY");
   assert.equal(inDays(1), "IN 1 DAY");
   assert.equal(inDays(49), "IN 49 DAYS");
+});
+
+test("endsLabel reads sensibly at every distance", () => {
+  const H = 3_600_000;
+  assert.equal(endsLabel(null, 0), null);
+  assert.equal(endsLabel(1000, 2000), "ENDED");
+  assert.equal(endsLabel(30 * 60_000, 0), "ENDS WITHIN THE HOUR");
+  assert.equal(endsLabel(5 * H, 0), "ENDS IN 5 HOURS");
+  assert.equal(endsLabel(47 * H, 0), "ENDS IN 47 HOURS");
+  assert.equal(endsLabel(48 * H, 0), "ENDS IN 2 DAYS");
+  assert.equal(endsLabel(9 * 24 * H + H, 0), "ENDS IN 9 DAYS");
+});
+
+test("tagLink adds app tags once and keeps the rest of the link", () => {
+  assert.equal(
+    tagLink("https://rivoxlabs.com/discount/APP20?redirect=%2Fproducts%2Fx"),
+    "https://rivoxlabs.com/discount/APP20?redirect=%2Fproducts%2Fx&utm_source=rivox_app&utm_medium=app&utm_campaign=drops",
+  );
+  assert.equal(
+    tagLink("https://rivoxlabs.com/pages/x#top"),
+    "https://rivoxlabs.com/pages/x?utm_source=rivox_app&utm_medium=app&utm_campaign=drops#top",
+  );
+  assert.equal(tagLink("https://rivoxlabs.com/?utm_source=email"), "https://rivoxlabs.com/?utm_source=email");
 });

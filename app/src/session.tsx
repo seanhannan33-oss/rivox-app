@@ -10,6 +10,8 @@ export type Status = "loading" | "signedOut" | "locked" | "member";
 interface SessionValue {
   status: Status;
   email: string | null;
+  /** For calls that need to prove who's asking. Null when signed out. */
+  token: string | null;
   access: Access | null;
   /** Save a fresh sign-in. */
   signIn: (token: string, email: string, access: Access) => Promise<void>;
@@ -103,7 +105,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
 
   const value = useMemo<SessionValue>(() => {
     const status: Status = loading ? "loading" : !stored ? "signedOut" : stored.access.allowed ? "member" : "locked";
-    return { status, email: stored?.email ?? null, access: stored?.access ?? null, signIn, signOut, recheck };
+    return { status, email: stored?.email ?? null, token: stored?.token ?? null, access: stored?.access ?? null, signIn, signOut, recheck };
   }, [loading, stored, signIn, signOut, recheck]);
 
   return <SessionContext.Provider value={value}>{children}</SessionContext.Provider>;

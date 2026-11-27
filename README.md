@@ -57,3 +57,10 @@ Checks: `npm run typecheck`. Not yet run on a real phone.
 - `DATABASE_URL`: Postgres connection string. Tables are created on start. Without it, storage is in memory.
 - `EMAIL_PROVIDER=resend` with `RESEND_API_KEY` and `EMAIL_FROM` emails the sign-in codes. `console` prints them to the log.
 - Database tests run only when `TEST_DATABASE_URL` points at a throwaway database.
+
+## Drops
+
+- Members see live drops on the Drops tab (`GET /drops`), filtered to their subscription.
+- Post and remove them at `/admin` on the server. It needs `ADMIN_TOKEN` (32+ characters) set in the server settings; with no token the admin page does not exist.
+- A drop's button can only link to hosts in `DROP_LINK_HOSTS` (default `rivoxlabs.com`).
+- For a discount that applies itself, use a Shopify discount link: `https://rivoxlabs.com/discount/CODE?redirect=/path`. The admin page builds it from the code and the path.

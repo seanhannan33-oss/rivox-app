@@ -2,6 +2,7 @@
 import pg from "pg";
 import type { Access } from "./access.ts";
 import type { StoredCode } from "./codes.ts";
+import type { Drop } from "./drops.ts";
 import type { Member, Store } from "./store.ts";
 
 /** The slice of pg.Pool this store uses, so tests can pass a real pool or a stand-in. */
@@ -31,6 +32,12 @@ export class PostgresStore implements Store {
         email      text PRIMARY KEY,
         access     jsonb NOT NULL,
         checked_at bigint NOT NULL
+      )`);
+    await this.db.query(`
+      CREATE TABLE IF NOT EXISTS drops (
+        id         text PRIMARY KEY,
+        data       jsonb NOT NULL,
+        created_at bigint NOT NULL
       )`);
   }
 
@@ -77,5 +84,27 @@ export class PostgresStore implements Store {
        ON CONFLICT (email) DO UPDATE SET access = EXCLUDED.access, checked_at = EXCLUDED.checked_at`,
       [member.email, JSON.stringify(member.access), member.checkedAt],
     );
+  }
+
+  async listDrops(): Promise<Drop[]> {
+    const { rows } = await this.db.query("SELECT data FROM drops ORDER BY created_at DESC");
+    return rows.map((r) => r.data as Drop);
+  }
+
+  async getDrop(id: string): Promise<Drop | undefined> {
+    const { rows } = await this.db.query("SELECT data FROM drops WHERE id = $1", [id]);
+    return rows[0] ? (rows[0].data as Drop) : undefined;
+  }
+
+  async putDrop(drop: Drop): Promise<void> {
+    await this.db.query(
+      `INSERT INTO drops (id, data, created_at) VALUES ($1, $2::jsonb, $3)
+       ON CONFLICT (id) DO UPDATE SET data = EXCLUDED.data`,
+      [drop.id, JSON.stringify(drop), drop.createdAt],
+    );
+  }
+
+  async deleteDrop(id: string): Promise<void> {
+    await this.db.query("DELETE FROM drops WHERE id = $1", [id]);
   }
 }

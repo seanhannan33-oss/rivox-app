@@ -61,6 +61,22 @@ export function fetchMe(token: string): Promise<{ email: string; access: Access;
   return call("/me", { headers: { authorization: `Bearer ${token}` } });
 }
 
+export interface Drop {
+  id: string;
+  kind: "deal" | "flavor";
+  audience: "all" | Product;
+  title: string;
+  body: string;
+  cta: string;
+  url: string;
+  startsAt: number;
+  endsAt: number | null;
+}
+
+export function fetchDrops(token: string): Promise<{ drops: Drop[] }> {
+  return call("/drops", { headers: { authorization: `Bearer ${token}` } });
+}
+
 /** Plain words for every error code the server can send back. */
 export function errorMessage(err: unknown): string {
   const code = err instanceof ApiError ? err.code : "unknown";

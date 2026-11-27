@@ -15,6 +15,10 @@ export interface Config {
   emailFrom: string;
   resendApiKey: string;
   databaseUrl: string;
+  /** Unlocks the admin page. Empty means admin is switched off. */
+  adminToken: string;
+  /** Hosts a drop's button may link to. */
+  linkHosts: string[];
 }
 
 function list(value: string | undefined): string[] {
@@ -22,6 +26,12 @@ function list(value: string | undefined): string[] {
     .split(",")
     .map((s) => s.trim())
     .filter(Boolean);
+}
+
+function adminToken(value: string | undefined): string {
+  const t = (value ?? "").trim();
+  if (t && t.length < 32) throw new Error("ADMIN_TOKEN must be at least 32 characters, or left unset.");
+  return t;
 }
 
 export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
@@ -46,5 +56,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
     emailFrom: env.EMAIL_FROM ?? "",
     resendApiKey: env.RESEND_API_KEY ?? "",
     databaseUrl: env.DATABASE_URL ?? "",
+    adminToken: adminToken(env.ADMIN_TOKEN),
+    linkHosts: list(env.DROP_LINK_HOSTS ?? "rivoxlabs.com").map((h) => h.toLowerCase()),
   };
 }

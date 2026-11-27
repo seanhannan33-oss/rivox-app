@@ -51,3 +51,27 @@ test("members: save, update and read back", { skip }, async () => {
     checkedAt: 1764199400000,
   });
 });
+
+test("drops: save, edit, list and delete", { skip }, async () => {
+  await pool.query("TRUNCATE drops");
+  const d = {
+    id: "d1",
+    kind: "deal" as const,
+    audience: "all" as const,
+    title: "20% off",
+    body: "Only here.",
+    cta: "CLAIM IT",
+    url: "https://rivoxlabs.com/discount/APP20",
+    startsAt: 1764199400000,
+    endsAt: null,
+    createdAt: 1764199400000,
+  };
+  await store.putDrop(d);
+  await store.putDrop({ ...d, id: "d2", title: "Second", createdAt: 1764199500000 });
+  await store.putDrop({ ...d, title: "25% off" });
+  assert.deepEqual(await store.getDrop("d1"), { ...d, title: "25% off" });
+  assert.deepEqual((await store.listDrops()).map((x) => x.id), ["d2", "d1"]);
+  await store.deleteDrop("d1");
+  assert.equal(await store.getDrop("d1"), undefined);
+  assert.equal((await store.listDrops()).length, 1);
+});

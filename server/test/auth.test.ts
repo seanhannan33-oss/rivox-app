@@ -23,6 +23,8 @@ const config: Config = {
   emailFrom: "",
   resendApiKey: "",
   databaseUrl: "",
+  adminToken: "admin-token-admin-token-admin-token-1",
+  linkHosts: ["rivoxlabs.com"],
 };
 
 function setup(subsByEmail: Record<string, Subscription[]> = {}) {
@@ -188,4 +190,92 @@ test("a Loop outage during sign-in returns 503, not a false lockout", async () =
   loopState.fail = true;
   const res = await post("/auth/verify", { email: "dan@example.com", code: sent[0]!.code });
   assert.equal(res.status, 503);
+});
+
+// ---- Drops ----
+
+const ADMIN = { Authorization: "Bearer admin-token-admin-token-admin-token-1" };
+const dealBody = {
+  kind: "deal",
+  audience: "no_curfew",
+  title: "20% off your next box",
+  body: "Not on the site. Not in your inbox. Only here.",
+  cta: "CLAIM IT",
+  url: "https://rivoxlabs.com/discount/APP20",
+};
+
+test("admin routes refuse a missing or wrong token", async () => {
+  const { app, post } = setup();
+  assert.equal((await app.request("/admin/drops")).status, 401);
+  assert.equal((await app.request("/admin/drops", { headers: { Authorization: "Bearer nope" } })).status, 401);
+  assert.equal((await post("/admin/drops", dealBody)).status, 401);
+  assert.equal((await app.request("/admin/drops/x", { method: "DELETE" })).status, 401);
+});
+
+test("the admin page is served without data, and locked down", async () => {
+  const { app } = setup();
+  const res = await app.request("/admin");
+  assert.equal(res.status, 200);
+  assert.match(res.headers.get("content-security-policy") ?? "", /default-src 'none'/);
+  assert.equal(res.headers.get("x-frame-options"), "DENY");
+  const html = await res.text();
+  assert.match(html, /Rivox app admin/);
+  assert.equal(html.includes("admin-token-admin-token"), false);
+});
+
+test("a posted deal reaches the right members only, then can be edited and removed", async () => {
+  const { app, post, signIn } = setup({
+    "nc@example.com": [active("111")],
+    "pouch@example.com": [active("222")],
+    "none@example.com": [],
+  });
+  const created = await post("/admin/drops", dealBody, ADMIN);
+  assert.equal(created.status, 201);
+  const id = ((await created.json()) as any).drop.id as string;
+
+  const feed = async (email: string) => {
+    const { body } = await signIn(email);
+    const res = await app.request("/drops", { headers: { Authorization: `Bearer ${body.token}` } });
+    return { status: res.status, body: (await res.json()) as any };
+  };
+  const nc = await feed("nc@example.com");
+  assert.equal(nc.status, 200);
+  assert.deepEqual(nc.body.drops.map((d: any) => d.title), ["20% off your next box"]);
+  assert.deepEqual((await feed("pouch@example.com")).body.drops, []);
+  assert.equal((await feed("none@example.com")).status, 403);
+  assert.equal((await app.request("/drops")).status, 401);
+
+  const edited = await app.request(`/admin/drops/${id}`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json", ...ADMIN },
+    body: JSON.stringify({ ...dealBody, audience: "all", title: "25% off" }),
+  });
+  assert.equal(edited.status, 200);
+  assert.deepEqual((await feed("pouch@example.com")).body.drops.map((d: any) => d.title), ["25% off"]);
+
+  assert.equal((await app.request(`/admin/drops/${id}`, { method: "DELETE", headers: ADMIN })).status, 200);
+  assert.deepEqual((await feed("nc@example.com")).body.drops, []);
+});
+
+test("a drop with a link off our store is refused", async () => {
+  const { post } = setup();
+  const res = await post("/admin/drops", { ...dealBody, url: "https://evil.example/discount/APP20" }, ADMIN);
+  assert.equal(res.status, 400);
+  assert.match(((await res.json()) as any).message, /link/);
+});
+
+test("scheduled and expired drops stay hidden from members", async () => {
+  const { app, post, signIn, clock } = setup({ "nc@example.com": [active("111")] });
+  const start = new Date(clock.t + 3_600_000).toISOString();
+  const end = new Date(clock.t + 7_200_000).toISOString();
+  await post("/admin/drops", { ...dealBody, startsAt: start, endsAt: end }, ADMIN);
+  const { body } = await signIn("nc@example.com");
+  const count = async () =>
+    ((await (await app.request("/drops", { headers: { Authorization: `Bearer ${body.token}` } })).json()) as any).drops
+      .length;
+  assert.equal(await count(), 0);
+  clock.t += 3_600_001;
+  assert.equal(await count(), 1);
+  clock.t += 3_600_000;
+  assert.equal(await count(), 0);
 });

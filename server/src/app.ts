@@ -9,7 +9,9 @@ import {
   normalizeEmail,
   verifyCode,
 } from "./codes.ts";
+import { ADMIN_PAGE } from "./admin-page.ts";
 import type { Config } from "./config.ts";
+import { dropsFor, isLive, parseDrop } from "./drops.ts";
 import type { EmailSender } from "./email.ts";
 import type { LoopClient } from "./loop.ts";
 import { createSession, readSession } from "./session.ts";
@@ -117,6 +119,64 @@ export function createApp(deps: Deps) {
       if (member) return c.json({ email: address, access: member.access, stale: true });
       return c.json({ error: "subscription_check_unavailable" }, 503);
     }
+  });
+
+  // Live drops for the signed-in member. Only what's meant for their subscription.
+  app.get("/drops", async (c) => {
+    const header = c.req.header("Authorization") ?? "";
+    const address = readSession(header.startsWith("Bearer ") ? header.slice(7) : undefined, config.sessionSecret, now());
+    if (!address) return c.json({ error: "unauthorized" }, 401);
+    const member = await store.getMember(address);
+    if (!member || !member.access.allowed) return c.json({ error: "members_only" }, 403);
+    return c.json({ drops: dropsFor(await store.listDrops(), member.access, now()) });
+  });
+
+  // Admin: post and remove drops. Off entirely unless ADMIN_TOKEN is set.
+  const isAdmin = (c: { req: { header(name: string): string | undefined } }) => {
+    const header = c.req.header("Authorization") ?? "";
+    const given = header.startsWith("Bearer ") ? header.slice(7) : "";
+    return config.adminToken !== "" && safeEqual(config.adminToken, given);
+  };
+
+  app.get("/admin", (c) => {
+    if (!config.adminToken) return c.notFound();
+    // The page holds no data and no secrets. It asks for the token and calls the API below.
+    c.header("Cache-Control", "no-store");
+    c.header("X-Frame-Options", "DENY");
+    c.header("Referrer-Policy", "no-referrer");
+    c.header("Content-Security-Policy", "default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; connect-src 'self'; form-action 'none'; base-uri 'none'");
+    return c.html(ADMIN_PAGE);
+  });
+
+  app.get("/admin/drops", async (c) => {
+    if (!isAdmin(c)) return c.json({ error: "unauthorized" }, 401);
+    const t = now();
+    const all = (await store.listDrops()).sort((a, b) => b.createdAt - a.createdAt);
+    return c.json({ drops: all.map((d) => ({ ...d, live: isLive(d, t) })) });
+  });
+
+  app.post("/admin/drops", async (c) => {
+    if (!isAdmin(c)) return c.json({ error: "unauthorized" }, 401);
+    const parsed = parseDrop(await c.req.json().catch(() => null), config.linkHosts, now());
+    if (!parsed.ok) return c.json({ error: "invalid_drop", message: parsed.error }, 400);
+    await store.putDrop(parsed.drop);
+    return c.json({ drop: parsed.drop }, 201);
+  });
+
+  app.put("/admin/drops/:id", async (c) => {
+    if (!isAdmin(c)) return c.json({ error: "unauthorized" }, 401);
+    const existing = await store.getDrop(c.req.param("id"));
+    if (!existing) return c.json({ error: "not_found" }, 404);
+    const parsed = parseDrop(await c.req.json().catch(() => null), config.linkHosts, now(), existing);
+    if (!parsed.ok) return c.json({ error: "invalid_drop", message: parsed.error }, 400);
+    await store.putDrop(parsed.drop);
+    return c.json({ drop: parsed.drop });
+  });
+
+  app.delete("/admin/drops/:id", async (c) => {
+    if (!isAdmin(c)) return c.json({ error: "unauthorized" }, 401);
+    await store.deleteDrop(c.req.param("id"));
+    return c.json({ ok: true });
   });
 
   // Loop calls this when a subscription is paused, resumed or cancelled.

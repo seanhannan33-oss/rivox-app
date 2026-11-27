@@ -95,3 +95,22 @@ export function inDays(n: number): string {
   if (n === 0) return "TODAY";
   return n === 1 ? "IN 1 DAY" : `IN ${n} DAYS`;
 }
+
+/** How a drop's deadline reads on its card. Null when it has no end. */
+export function endsLabel(endsAt: number | null, nowMs: number): string | null {
+  if (endsAt === null) return null;
+  const left = endsAt - nowMs;
+  if (left <= 0) return "ENDED";
+  const hours = Math.ceil(left / 3_600_000);
+  if (hours <= 1) return "ENDS WITHIN THE HOUR";
+  if (hours < 48) return `ENDS IN ${hours} HOURS`;
+  return `ENDS IN ${Math.floor(hours / 24)} DAYS`;
+}
+
+/** Tags a store link so app orders can be told apart. Leaves existing tags alone. */
+export function tagLink(url: string): string {
+  if (/[?&]utm_source=/.test(url)) return url;
+  const [base, hash = ""] = url.split("#");
+  const sep = base!.includes("?") ? "&" : "?";
+  return `${base}${sep}utm_source=rivox_app&utm_medium=app&utm_campaign=drops${hash ? `#${hash}` : ""}`;
+}

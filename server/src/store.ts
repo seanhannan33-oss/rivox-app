@@ -2,6 +2,7 @@
 // everything on restart. Production needs a database-backed Store.
 import type { Access } from "./access.ts";
 import type { StoredCode } from "./codes.ts";
+import type { Drop } from "./drops.ts";
 
 export interface Member {
   email: string;
@@ -16,11 +17,16 @@ export interface Store {
   deleteCode(email: string): Promise<void>;
   getMember(email: string): Promise<Member | undefined>;
   putMember(member: Member): Promise<void>;
+  listDrops(): Promise<Drop[]>;
+  getDrop(id: string): Promise<Drop | undefined>;
+  putDrop(drop: Drop): Promise<void>;
+  deleteDrop(id: string): Promise<void>;
 }
 
 export class MemoryStore implements Store {
   private codes = new Map<string, StoredCode>();
   private members = new Map<string, Member>();
+  private drops = new Map<string, Drop>();
 
   async getCode(email: string) {
     return this.codes.get(email);
@@ -36,5 +42,17 @@ export class MemoryStore implements Store {
   }
   async putMember(member: Member) {
     this.members.set(member.email, member);
+  }
+  async listDrops() {
+    return [...this.drops.values()];
+  }
+  async getDrop(id: string) {
+    return this.drops.get(id);
+  }
+  async putDrop(drop: Drop) {
+    this.drops.set(drop.id, drop);
+  }
+  async deleteDrop(id: string) {
+    this.drops.delete(id);
   }
 }
