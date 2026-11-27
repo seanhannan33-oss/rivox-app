@@ -124,6 +124,53 @@ export function createApp(deps: Deps) {
     }
   });
 
+  const SYNC_PARTS = ["days", "train"];
+  const MAX_SYNC_BYTES = 300_000;
+  const sessionEmail = (c: { req: { header(name: string): string | undefined } }) => {
+    const header = c.req.header("Authorization") ?? "";
+    return readSession(header.startsWith("Bearer ") ? header.slice(7) : undefined, config.sessionSecret, now());
+  };
+
+  // A member's check-ins and training log, so a new phone doesn't mean starting over.
+  // The server stores what the app sends and hands it back. It never reads into it.
+  app.get("/sync/:part", async (c) => {
+    const address = sessionEmail(c);
+    if (!address) return c.json({ error: "unauthorized" }, 401);
+    const part = c.req.param("part");
+    if (!SYNC_PARTS.includes(part)) return c.json({ error: "not_found" }, 404);
+    return c.json({ data: (await store.getSync(address, part)) ?? null });
+  });
+
+  app.put("/sync/:part", async (c) => {
+    const address = sessionEmail(c);
+    if (!address) return c.json({ error: "unauthorized" }, 401);
+    const part = c.req.param("part");
+    if (!SYNC_PARTS.includes(part)) return c.json({ error: "not_found" }, 404);
+    const member = await store.getMember(address);
+    if (!member || !member.access.allowed) return c.json({ error: "members_only" }, 403);
+    const raw = await c.req.text();
+    if (raw.length > MAX_SYNC_BYTES) return c.json({ error: "too_big" }, 413);
+    let body: unknown;
+    try {
+      body = JSON.parse(raw);
+    } catch {
+      return c.json({ error: "invalid_request" }, 400);
+    }
+    const data = (body as { data?: unknown } | null)?.data;
+    if (!data || typeof data !== "object" || Array.isArray(data)) return c.json({ error: "invalid_request" }, 400);
+    await store.putSync(address, part, data, now());
+    return c.json({ ok: true });
+  });
+
+  // Account deletion. Wipes everything we hold for this email. It does not touch
+  // their Rivox subscription, which lives in Loop and Shopify.
+  app.delete("/me", async (c) => {
+    const address = sessionEmail(c);
+    if (!address) return c.json({ error: "unauthorized" }, 401);
+    await store.deleteMemberData(address);
+    return c.json({ ok: true });
+  });
+
   // Live drops for the signed-in member. Only what's meant for their subscription.
   app.get("/drops", async (c) => {
     const header = c.req.header("Authorization") ?? "";

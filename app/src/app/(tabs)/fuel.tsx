@@ -23,7 +23,7 @@ const QUICK = [10, 20, 30, 40];
 
 export default function Fuel() {
   const { email, token, access, signOut } = useSession();
-  const { today, entry: dayEntry } = useDayLog(email);
+  const { today, entry: dayEntry } = useDayLog();
   const { ready, profile, entries, setProfile, add, remove } = useFuel(email, today);
   const hasNoCurfew = (access?.products ?? []).includes("no_curfew");
 

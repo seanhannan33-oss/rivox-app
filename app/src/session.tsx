@@ -1,6 +1,7 @@
 import * as SecureStore from "expo-secure-store";
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
-import { ApiError, fetchMe, type Access } from "./api";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import { ApiError, deleteAccount as deleteOnServer, fetchMe, type Access } from "./api";
 
 const KEY = "rivox.session.v1";
 
@@ -16,6 +17,8 @@ interface SessionValue {
   /** Save a fresh sign-in. */
   signIn: (token: string, email: string, access: Access) => Promise<void>;
   signOut: () => Promise<void>;
+  /** Wipes the account on the server and everything saved on this phone. Throws if the server can't be reached. */
+  deleteAccount: () => Promise<void>;
   /** Ask the server again. Throws so the screen can show why it failed. */
   recheck: () => Promise<Access>;
 }
@@ -86,6 +89,15 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     setStored(null);
   }, []);
 
+  const deleteAccount = useCallback(async () => {
+    if (!stored) return;
+    await deleteOnServer(stored.token); // if this fails we stop here, so nothing is half-deleted
+    const keys = ["days", "train", "fuel"].map((part) => `rivox.${part}.v1.${stored.email}`);
+    await AsyncStorage.multiRemove(keys).catch(() => {});
+    await save(null);
+    setStored(null);
+  }, [stored]);
+
   const recheck = useCallback(async () => {
     if (!stored) throw new ApiError("unauthorized", 401);
     try {
@@ -105,8 +117,8 @@ export function SessionProvider({ children }: { children: ReactNode }) {
 
   const value = useMemo<SessionValue>(() => {
     const status: Status = loading ? "loading" : !stored ? "signedOut" : stored.access.allowed ? "member" : "locked";
-    return { status, email: stored?.email ?? null, token: stored?.token ?? null, access: stored?.access ?? null, signIn, signOut, recheck };
-  }, [loading, stored, signIn, signOut, recheck]);
+    return { status, email: stored?.email ?? null, token: stored?.token ?? null, access: stored?.access ?? null, signIn, signOut, deleteAccount, recheck };
+  }, [loading, stored, signIn, signOut, deleteAccount, recheck]);
 
   return <SessionContext.Provider value={value}>{children}</SessionContext.Provider>;
 }

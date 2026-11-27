@@ -75,3 +75,26 @@ test("drops: save, edit, list and delete", { skip }, async () => {
   assert.equal(await store.getDrop("d1"), undefined);
   assert.equal((await store.listDrops()).length, 1);
 });
+
+test("sync docs and usage: save, overwrite, read, and delete everything for one member", { skip }, async () => {
+  await pool.query("TRUNCATE sync_docs, usage_counts, members, sign_in_codes");
+  await store.putSync("a@b.co", "days", { v: 1 }, 1);
+  await store.putSync("a@b.co", "days", { v: 2 }, 2);
+  await store.putSync("a@b.co", "train", { t: 1 }, 2);
+  await store.putSync("z@b.co", "days", { keep: true }, 2);
+  assert.deepEqual(await store.getSync("a@b.co", "days"), { v: 2 });
+  assert.equal(await store.getSync("a@b.co", "nope"), undefined);
+  assert.equal(await store.bumpUsage("a@b.co", "meal_photo", "2026-11-26"), 1);
+  assert.equal(await store.bumpUsage("a@b.co", "meal_photo", "2026-11-26"), 2);
+  assert.equal(await store.bumpUsage("a@b.co", "meal_photo", "2026-11-27"), 1);
+  await store.putMember({ email: "a@b.co", access: { allowed: true, products: [], details: {} }, checkedAt: 1 });
+  await store.putCode("a@b.co", { hash: "h", expiresAt: 1, attempts: 0, sentAt: 1 });
+
+  await store.deleteMemberData("a@b.co");
+  assert.equal(await store.getSync("a@b.co", "days"), undefined);
+  assert.equal(await store.getSync("a@b.co", "train"), undefined);
+  assert.equal(await store.getMember("a@b.co"), undefined);
+  assert.equal(await store.getCode("a@b.co"), undefined);
+  assert.equal(await store.bumpUsage("a@b.co", "meal_photo", "2026-11-26"), 1); // counter was cleared
+  assert.deepEqual(await store.getSync("z@b.co", "days"), { keep: true });
+});

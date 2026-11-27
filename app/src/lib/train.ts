@@ -90,6 +90,8 @@ export interface SessionLog {
   reps: number;
   /** Day key it was finished on. Missing until all sets are done. */
   doneOn?: string;
+  /** When this was last changed, ms since epoch. Used to merge with the server. */
+  t?: number;
 }
 export type TrainLog = Record<string, SessionLog>;
 

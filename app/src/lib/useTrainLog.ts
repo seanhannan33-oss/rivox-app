@@ -1,48 +1,35 @@
-import AsyncStorage from "@react-native-async-storage/async-storage";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback } from "react";
+import { useSession } from "../session";
+import { mergeTrain, readTrain } from "./sync";
 import { pruneTrain, type SessionLog, type TrainLog } from "./train";
+import { useSyncedDoc } from "./useSyncedDoc";
 
-const keyFor = (email: string) => `rivox.train.v1.${email}`;
+export const trainStorageKey = (email: string) => `rivox.train.v1.${email}`;
+const emptyTrain = (): TrainLog => ({});
 
-/** The member's training log, kept on this phone only. */
-export function useTrainLog(email: string | null, today: string) {
-  const [log, setLog] = useState<TrainLog | null>(null);
-
-  useEffect(() => {
-    if (!email) return;
-    let alive = true;
-    (async () => {
-      let value: TrainLog = {};
-      try {
-        const raw = await AsyncStorage.getItem(keyFor(email));
-        const parsed: unknown = raw ? JSON.parse(raw) : null;
-        if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) value = parsed as TrainLog;
-      } catch {
-        // Unreadable data: start fresh rather than crash.
-      }
-      if (alive) setLog(value);
-    })();
-    return () => {
-      alive = false;
-    };
-  }, [email]);
+/** The member's training log: on the phone first, mirrored to the server. */
+export function useTrainLog(today: string) {
+  const { email, token } = useSession();
+  const { ready, doc, change } = useSyncedDoc<TrainLog>({
+    email,
+    token,
+    part: "train",
+    storageKey: trainStorageKey,
+    empty: emptyTrain,
+    read: readTrain,
+    merge: mergeTrain,
+  });
 
   const update = useCallback(
-    (key: string, change: (prev: SessionLog | undefined) => SessionLog | undefined) => {
-      if (!email) return;
-      setLog((prev) => {
-        if (!prev) return prev;
-        const next = { ...prev };
-        const value = change(prev[key]);
-        if (value) next[key] = value;
-        else delete next[key];
-        const pruned = pruneTrain(next, today);
-        AsyncStorage.setItem(keyFor(email), JSON.stringify(pruned)).catch(() => {});
-        return pruned;
-      });
-    },
-    [email, today],
+    (key: string, fn: (prev: SessionLog | undefined) => SessionLog | undefined) =>
+      change((prev) => {
+        const before = prev[key];
+        // An undone session is kept as "0 sets" rather than removed, so the undo also reaches the server.
+        const value = fn(before) ?? { sets: 0, reps: before?.reps ?? 0 };
+        return pruneTrain({ ...prev, [key]: { ...value, t: Date.now() } }, today);
+      }),
+    [change, today],
   );
 
-  return { ready: log !== null, log: log ?? {}, update };
+  return { ready, log: doc ?? {}, update };
 }

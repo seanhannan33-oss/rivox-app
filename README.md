@@ -70,3 +70,8 @@ Checks: `npm run typecheck`. Not yet run on a real phone.
 - The protein target is 0.8 g per pound of body weight. Weight, target and the food log stay on the phone.
 - Meal photos go to `POST /fuel/estimate`, which asks a vision model for a protein estimate. The photo is not stored.
 - Set `ANTHROPIC_API_KEY` on the server to switch photos on. `PHOTO_DAILY_LIMIT` caps photos per member per day (default 12).
+
+## Sync and account deletion
+
+- Check-ins and the training log are kept on the phone and mirrored to the server (`/sync/days`, `/sync/train`). The newer change wins. Body weight and the food log are never sent.
+- `DELETE /me` removes everything held for that email: member record, sign-in codes, synced data and usage counts. It does not touch the Loop subscription.

@@ -346,3 +346,62 @@ test("photos are off without a key, and a model failure is reported plainly", as
   assert.equal(bad.status, 502);
   assert.equal(((await bad.json()) as any).error, "photo_failed");
 });
+
+// ---- Sync and account deletion ----
+
+test("a member's data syncs up and comes back, per part", async () => {
+  const { app, signIn } = setup({ "nc@example.com": [active("111")] });
+  const { body } = await signIn("nc@example.com");
+  const auth = { Authorization: `Bearer ${body.token}`, "Content-Type": "application/json" };
+  const get = async (part: string) => (await (await app.request(`/sync/${part}`, { headers: auth })).json()) as any;
+  const put = (part: string, payload: unknown) =>
+    app.request(`/sync/${part}`, { method: "PUT", headers: auth, body: JSON.stringify(payload) });
+
+  assert.equal((await get("days")).data, null);
+  const days = { firstDay: "2026-11-26", log: { "2026-11-26": { caps: true, t: 5 } } };
+  assert.equal((await put("days", { data: days })).status, 200);
+  assert.deepEqual((await get("days")).data, days);
+  assert.equal((await get("train")).data, null); // parts are separate
+
+  assert.equal((await put("fuel", { data: {} })).status, 404); // weight and food never sync
+  assert.equal((await put("days", { data: [1, 2] })).status, 400);
+  assert.equal((await put("days", { nope: true })).status, 400);
+  assert.equal((await put("days", { data: { pad: "x".repeat(300_001) } })).status, 413);
+  assert.equal((await app.request("/sync/days")).status, 401);
+});
+
+test("only members can save, and one member can't see another's data", async () => {
+  const { app, signIn } = setup({ "a@example.com": [active("111")], "b@example.com": [active("111")], "none@example.com": [] });
+  const hdr = async (email: string) => ({
+    Authorization: `Bearer ${(await signIn(email)).body.token}`,
+    "Content-Type": "application/json",
+  });
+  const a = await hdr("a@example.com");
+  await app.request("/sync/days", { method: "PUT", headers: a, body: JSON.stringify({ data: { secret: 1 } }) });
+  const b = await hdr("b@example.com");
+  assert.equal(((await (await app.request("/sync/days", { headers: b })).json()) as any).data, null);
+  const none = await hdr("none@example.com");
+  const res = await app.request("/sync/days", { method: "PUT", headers: none, body: JSON.stringify({ data: {} }) });
+  assert.equal(res.status, 403);
+});
+
+test("deleting the account wipes everything held for that email", async () => {
+  const calls = { n: 0 };
+  const { app, post, signIn } = setup({ "nc@example.com": [active("111")], "b@example.com": [active("111")] }, fakeMeals(calls));
+  const { body } = await signIn("nc@example.com");
+  const auth = { Authorization: `Bearer ${body.token}`, "Content-Type": "application/json" };
+  await app.request("/sync/days", { method: "PUT", headers: auth, body: JSON.stringify({ data: { x: 1 } }) });
+  await app.request("/sync/train", { method: "PUT", headers: auth, body: JSON.stringify({ data: { y: 1 } }) });
+  await post("/fuel/estimate", { image: PHOTO, mediaType: "image/jpeg" }, auth);
+  const other = await signIn("b@example.com");
+  const otherAuth = { Authorization: `Bearer ${other.body.token}`, "Content-Type": "application/json" };
+  await app.request("/sync/days", { method: "PUT", headers: otherAuth, body: JSON.stringify({ data: { keep: 1 } }) });
+
+  assert.equal((await app.request("/me", { method: "DELETE" })).status, 401);
+  assert.equal((await app.request("/me", { method: "DELETE", headers: auth })).status, 200);
+
+  assert.equal(((await (await app.request("/sync/days", { headers: auth })).json()) as any).data, null);
+  assert.equal(((await (await app.request("/sync/train", { headers: auth })).json()) as any).data, null);
+  // Someone else's data is untouched.
+  assert.deepEqual(((await (await app.request("/sync/days", { headers: otherAuth })).json()) as any).data, { keep: 1 });
+});

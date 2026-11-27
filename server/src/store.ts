@@ -23,6 +23,11 @@ export interface Store {
   deleteDrop(id: string): Promise<void>;
   /** Adds one to a member's counter for a day and returns the new total. Used to cap paid features. */
   bumpUsage(email: string, kind: string, day: string): Promise<number>;
+  /** A member's synced app data (check-ins, training log), one document per part. */
+  getSync(email: string, part: string): Promise<unknown | undefined>;
+  putSync(email: string, part: string, data: unknown, updatedAt: number): Promise<void>;
+  /** Removes everything held about one email. Used by account deletion. */
+  deleteMemberData(email: string): Promise<void>;
 }
 
 export class MemoryStore implements Store {
@@ -30,6 +35,7 @@ export class MemoryStore implements Store {
   private members = new Map<string, Member>();
   private drops = new Map<string, Drop>();
   private usage = new Map<string, number>();
+  private sync = new Map<string, unknown>();
 
   async getCode(email: string) {
     return this.codes.get(email);
@@ -63,5 +69,18 @@ export class MemoryStore implements Store {
     const n = (this.usage.get(key) ?? 0) + 1;
     this.usage.set(key, n);
     return n;
+  }
+  async getSync(email: string, part: string) {
+    return this.sync.get(`${email}|${part}`);
+  }
+  async putSync(email: string, part: string, data: unknown) {
+    this.sync.set(`${email}|${part}`, data);
+  }
+  async deleteMemberData(email: string) {
+    this.codes.delete(email);
+    this.members.delete(email);
+    for (const map of [this.usage, this.sync] as Map<string, unknown>[]) {
+      for (const key of [...map.keys()]) if (key.startsWith(`${email}|`)) map.delete(key);
+    }
   }
 }

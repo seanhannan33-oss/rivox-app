@@ -94,6 +94,25 @@ export function estimateMeal(token: string, imageBase64: string): Promise<{ esti
   });
 }
 
+export type SyncPart = "days" | "train";
+
+export function getSync(token: string, part: SyncPart): Promise<{ data: unknown }> {
+  return call(`/sync/${part}`, { headers: { authorization: `Bearer ${token}` } });
+}
+
+export function putSync(token: string, part: SyncPart, data: unknown): Promise<{ ok: true }> {
+  return call(`/sync/${part}`, {
+    method: "PUT",
+    headers: { authorization: `Bearer ${token}` },
+    body: JSON.stringify({ data }),
+  });
+}
+
+/** Deletes everything the server holds for this account. Their subscription is not affected. */
+export function deleteAccount(token: string): Promise<{ ok: true }> {
+  return call("/me", { method: "DELETE", headers: { authorization: `Bearer ${token}` } });
+}
+
 /** Plain words for every error code the server can send back. */
 export function errorMessage(err: unknown): string {
   const code = err instanceof ApiError ? err.code : "unknown";

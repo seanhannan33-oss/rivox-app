@@ -8,7 +8,8 @@ interface Saved {
   days: FuelDays;
 }
 
-const keyFor = (email: string) => `rivox.fuel.v1.${email}`;
+export const fuelStorageKey = (email: string) => `rivox.fuel.v1.${email}`;
+const keyFor = fuelStorageKey;
 
 /** Protein log and body-weight target. Kept on this phone only: nothing here is sent to the server. */
 export function useFuel(email: string | null, today: string) {

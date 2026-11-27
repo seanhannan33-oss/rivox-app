@@ -1,8 +1,10 @@
 import { Tabs } from "expo-router/js-tabs";
+import { DayLogProvider } from "../../lib/useDayLog";
 import { colors, fonts } from "../../theme";
 
 export default function TabsLayout() {
   return (
+    <DayLogProvider>
     <Tabs
       screenOptions={{
         headerShown: false,
@@ -20,5 +22,6 @@ export default function TabsLayout() {
       <Tabs.Screen name="fuel" options={{ title: "FUEL" }} />
       <Tabs.Screen name="drops" options={{ title: "DROPS" }} />
     </Tabs>
+    </DayLogProvider>
   );
 }

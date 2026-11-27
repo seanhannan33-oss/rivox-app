@@ -47,6 +47,14 @@ export class PostgresStore implements Store {
         n     integer NOT NULL,
         PRIMARY KEY (email, kind, day)
       )`);
+    await this.db.query(`
+      CREATE TABLE IF NOT EXISTS sync_docs (
+        email      text NOT NULL,
+        part       text NOT NULL,
+        data       jsonb NOT NULL,
+        updated_at bigint NOT NULL,
+        PRIMARY KEY (email, part)
+      )`);
   }
 
   async getCode(email: string): Promise<StoredCode | undefined> {
@@ -124,5 +132,24 @@ export class PostgresStore implements Store {
       [email, kind, day],
     );
     return Number(rows[0]?.n ?? 1);
+  }
+
+  async getSync(email: string, part: string): Promise<unknown | undefined> {
+    const { rows } = await this.db.query("SELECT data FROM sync_docs WHERE email = $1 AND part = $2", [email, part]);
+    return rows[0]?.data;
+  }
+
+  async putSync(email: string, part: string, data: unknown, updatedAt: number): Promise<void> {
+    await this.db.query(
+      `INSERT INTO sync_docs (email, part, data, updated_at) VALUES ($1, $2, $3::jsonb, $4)
+       ON CONFLICT (email, part) DO UPDATE SET data = EXCLUDED.data, updated_at = EXCLUDED.updated_at`,
+      [email, part, JSON.stringify(data), updatedAt],
+    );
+  }
+
+  async deleteMemberData(email: string): Promise<void> {
+    for (const table of ["sign_in_codes", "members", "usage_counts", "sync_docs"]) {
+      await this.db.query(`DELETE FROM ${table} WHERE email = $1`, [email]);
+    }
   }
 }

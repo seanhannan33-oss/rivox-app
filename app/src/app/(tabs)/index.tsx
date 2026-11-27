@@ -1,8 +1,9 @@
-import { Image, ImageBackground, Pressable, StyleSheet, Text, View } from "react-native";
+import { useState } from "react";
+import { Alert, Image, ImageBackground, Pressable, StyleSheet, Text, View } from "react-native";
 import { Body, Button, Label, Screen } from "../../components/ui";
 import { dayLine, dayNumber, daysUntil, earliestStart, inDays, nextBadge, toggleHabit } from "../../lib/days";
 import { useDayLog } from "../../lib/useDayLog";
-import type { ProductDetail } from "../../api";
+import { errorMessage, type ProductDetail } from "../../api";
 import { useSession } from "../../session";
 import { colors, fonts, radius } from "../../theme";
 
@@ -15,8 +16,8 @@ const HABITS = [
 const MG_PER_POUCH = 60;
 
 export default function Today() {
-  const { email, access, signOut } = useSession();
-  const { ready, entry, streak, today, firstDay, update } = useDayLog(email);
+  const { email, access, signOut, deleteAccount } = useSession();
+  const { ready, entry, streak, today, firstDay, update } = useDayLog();
   const products = access?.products ?? [];
   const hasNoCurfew = products.includes("no_curfew");
   const hasPouches = products.includes("pouches");
@@ -25,6 +26,30 @@ export default function Today() {
   const noCurfew = access?.details?.no_curfew;
   const pouchSub = access?.details?.pouches;
   const day = dayNumber(earliestStart([noCurfew?.startedAt, pouchSub?.startedAt]) ?? firstDay, today);
+
+  const [deleting, setDeleting] = useState(false);
+  function confirmDelete() {
+    Alert.alert(
+      "Delete your account?",
+      "This wipes your check-ins, training log and protein log from this phone and our servers. It can't be undone. Your Rivox subscription is not cancelled.",
+      [
+        { text: "Keep it", style: "cancel" },
+        {
+          text: "Delete everything",
+          style: "destructive",
+          onPress: async () => {
+            setDeleting(true);
+            try {
+              await deleteAccount(); // signs them out when it's done
+            } catch (err) {
+              setDeleting(false);
+              Alert.alert("Couldn't delete", `${errorMessage(err)} Nothing was removed.`);
+            }
+          },
+        },
+      ],
+    );
+  }
 
   const pouches = entry.pouches ?? 0;
   const badge = nextBadge(streak);
@@ -134,9 +159,18 @@ export default function Today() {
           );
         })}
 
-        <Pressable onPress={signOut} accessibilityRole="button" style={s.signOut}>
-          <Text style={s.signOutText}>{email} · Sign out</Text>
-        </Pressable>
+        <View style={s.account}>
+          <Text style={s.signOutText}>{email}</Text>
+          <View style={s.accountRow}>
+            <Pressable onPress={signOut} disabled={deleting} accessibilityRole="button" hitSlop={10}>
+              <Text style={s.accountLink}>Sign out</Text>
+            </Pressable>
+            <Text style={s.signOutText}>·</Text>
+            <Pressable onPress={confirmDelete} disabled={deleting} accessibilityRole="button" hitSlop={10}>
+              <Text style={s.accountLink}>{deleting ? "Deleting" : "Delete my account"}</Text>
+            </Pressable>
+          </View>
+        </View>
 
         {hasNoCurfew ? (
           <Text style={s.fda}>
@@ -281,7 +315,9 @@ const s = StyleSheet.create({
   habitText: { fontFamily: fonts.medium, color: colors.text, fontSize: 15, flexShrink: 1 },
   habitState: { fontFamily: fonts.bold, color: colors.muted, fontSize: 11, letterSpacing: 1, marginLeft: 12 },
   habitStateOn: { color: colors.yellow },
-  signOut: { alignItems: "center", paddingVertical: 24 },
+  account: { alignItems: "center", paddingVertical: 24 },
+  accountRow: { flexDirection: "row", alignItems: "center", gap: 10, marginTop: 6 },
+  accountLink: { fontFamily: fonts.bold, color: colors.muted, fontSize: 13, textDecorationLine: "underline" },
   signOutText: { fontFamily: fonts.body, color: colors.muted, fontSize: 13 },
   fda: { fontFamily: fonts.body, color: colors.muted, fontSize: 11, lineHeight: 16 },
 });

@@ -34,9 +34,9 @@ const STATE_TEXT: Record<DayState, string> = {
 };
 
 export default function Train() {
-  const { email, access } = useSession();
-  const { today, firstDay } = useDayLog(email);
-  const { ready, log, update } = useTrainLog(email, today);
+  const { access } = useSession();
+  const { today, firstDay } = useDayLog();
+  const { ready, log, update } = useTrainLog(today);
 
   const start = earliestStart([access?.details?.no_curfew?.startedAt, access?.details?.pouches?.startedAt]) ?? firstDay;
   const week = weekNumber(start, today);

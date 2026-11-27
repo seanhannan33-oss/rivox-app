@@ -4,6 +4,8 @@ export interface DayEntry {
   caps?: boolean;
   pouches?: number;
   habits?: string[];
+  /** When this day was last changed, ms since epoch. Used to merge with the server. */
+  t?: number;
 }
 export type DayLog = Record<string, DayEntry>;
 
