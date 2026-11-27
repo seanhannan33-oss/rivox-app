@@ -13,6 +13,8 @@ export interface Config {
   pouchProductIds: string[];
   emailProvider: string;
   emailFrom: string;
+  resendApiKey: string;
+  databaseUrl: string;
 }
 
 function list(value: string | undefined): string[] {
@@ -42,5 +44,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
     pouchProductIds: list(env.POUCH_PRODUCT_IDS),
     emailProvider: env.EMAIL_PROVIDER ?? "console",
     emailFrom: env.EMAIL_FROM ?? "",
+    resendApiKey: env.RESEND_API_KEY ?? "",
+    databaseUrl: env.DATABASE_URL ?? "",
   };
 }

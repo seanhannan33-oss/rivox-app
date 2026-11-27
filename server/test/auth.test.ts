@@ -21,6 +21,8 @@ const config: Config = {
   pouchProductIds: ["222"],
   emailProvider: "console",
   emailFrom: "",
+  resendApiKey: "",
+  databaseUrl: "",
 };
 
 function setup(subsByEmail: Record<string, Subscription[]> = {}) {

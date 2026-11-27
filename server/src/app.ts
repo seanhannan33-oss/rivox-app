@@ -59,7 +59,14 @@ export function createApp(deps: Deps) {
     }
     const code = generateCode();
     await store.putCode(address, newStoredCode(address, code, config.sessionSecret, now()));
-    await email.sendCode(address, code);
+    try {
+      await email.sendCode(address, code);
+    } catch (err) {
+      // Drop the code so they can ask again right away instead of waiting out the resend timer.
+      await store.deleteCode(address);
+      console.error("Sending a sign-in code failed:", err);
+      return c.json({ error: "email_unavailable" }, 503);
+    }
     return c.json({ ok: true });
   });
 

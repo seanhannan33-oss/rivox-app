@@ -70,6 +70,8 @@ export function errorMessage(err: unknown): string {
       return "Six digits. That's the whole job.";
     case "subscription_check_unavailable":
       return "Can't check your subscription right now. Give it a minute.";
+    case "email_unavailable":
+      return "Couldn't send your code. Try again in a minute.";
     case "network":
       return "No connection. Find some bars and try again.";
     default:

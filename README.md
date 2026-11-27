@@ -51,3 +51,9 @@ Never commit `.env`. The Loop API token and session secret live only in the serv
 
 Run it: `cd app && cp .env.example .env && npm install && npx expo start`.
 Checks: `npm run typecheck`. Not yet run on a real phone.
+
+## Server: going from test to real
+
+- `DATABASE_URL`: Postgres connection string. Tables are created on start. Without it, storage is in memory.
+- `EMAIL_PROVIDER=resend` with `RESEND_API_KEY` and `EMAIL_FROM` emails the sign-in codes. `console` prints them to the log.
+- Database tests run only when `TEST_DATABASE_URL` points at a throwaway database.
