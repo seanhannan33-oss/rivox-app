@@ -464,3 +464,49 @@ test("the admin can see which address the server thinks they are", async () => {
   assert.deepEqual(await res.json(), { ip: "5.5.5.5", forwarded: 2, trustedHops: 1 });
   assert.equal((await app.request("/admin/whoami")).status, 401);
 });
+
+// ---- Check-in count ----
+
+test("check-ins count each member once a day and can be undone", async () => {
+  const { app, signIn, clock } = setup({
+    "a@example.com": [active("111")],
+    "b@example.com": [active("222")],
+    "none@example.com": [],
+  });
+  const day = new Date(clock.t).toISOString().slice(0, 10);
+  const tokens: Record<string, string> = {};
+  const put = async (email: string, body: unknown) => {
+    tokens[email] ??= (await signIn(email)).body.token; // sign in once per person
+    const res = await app.request("/checkin", {
+      method: "PUT",
+      headers: { Authorization: `Bearer ${tokens[email]}`, "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+    return { status: res.status, body: (await res.json()) as any };
+  };
+  assert.equal((await put("a@example.com", { day, done: true })).body.count, 1);
+  assert.equal((await put("a@example.com", { day, done: true })).body.count, 1); // tapping twice isn't two people
+  assert.equal((await put("b@example.com", { day, done: true })).body.count, 2);
+  assert.equal((await put("b@example.com", { day, done: false })).body.count, 1); // asking with done:false also reads the count
+  assert.equal((await put("a@example.com", { day, done: false })).body.count, 0);
+
+  assert.equal((await put("none@example.com", { day, done: true })).status, 403);
+  assert.equal((await put("a@example.com", { day: "2020-01-01", done: true })).status, 400); // can't stuff old days
+  assert.equal((await put("a@example.com", { day: "soon", done: true })).status, 400);
+  assert.equal((await put("a@example.com", { day })).status, 400);
+  assert.equal((await app.request("/checkin", { method: "PUT" })).status, 401);
+});
+
+test("deleting an account removes its check-in from the count", async () => {
+  const { app, signIn, clock } = setup({ "a@example.com": [active("111")], "b@example.com": [active("111")] });
+  const day = new Date(clock.t).toISOString().slice(0, 10);
+  const hdr = async (email: string) => ({ Authorization: `Bearer ${(await signIn(email)).body.token}`, "Content-Type": "application/json" });
+  const a = await hdr("a@example.com");
+  const b = await hdr("b@example.com");
+  const check = async (h: Record<string, string>, done: boolean) =>
+    ((await (await app.request("/checkin", { method: "PUT", headers: h, body: JSON.stringify({ day, done }) })).json()) as any).count;
+  await check(a, true);
+  assert.equal(await check(b, true), 2);
+  await app.request("/me", { method: "DELETE", headers: a });
+  assert.equal(await check(b, true), 1);
+});

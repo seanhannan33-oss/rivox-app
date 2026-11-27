@@ -98,3 +98,19 @@ test("sync docs and usage: save, overwrite, read, and delete everything for one 
   assert.equal(await store.bumpUsage("a@b.co", "meal_photo", "2026-11-26"), 1); // counter was cleared
   assert.deepEqual(await store.getSync("z@b.co", "days"), { keep: true });
 });
+
+test("check-ins: one per member per day, countable, undoable, wiped with the member", { skip }, async () => {
+  await pool.query("TRUNCATE checkins");
+  await store.setCheckin("a@b.co", "2026-11-27", true);
+  await store.setCheckin("a@b.co", "2026-11-27", true);
+  await store.setCheckin("c@b.co", "2026-11-27", true);
+  await store.setCheckin("c@b.co", "2026-11-26", true);
+  assert.equal(await store.countCheckins("2026-11-27"), 2);
+  assert.equal(await store.countCheckins("2026-11-26"), 1);
+  assert.equal(await store.countCheckins("2026-11-25"), 0);
+  await store.setCheckin("a@b.co", "2026-11-27", false);
+  assert.equal(await store.countCheckins("2026-11-27"), 1);
+  await store.deleteMemberData("c@b.co");
+  assert.equal(await store.countCheckins("2026-11-27"), 0);
+  assert.equal(await store.countCheckins("2026-11-26"), 0);
+});

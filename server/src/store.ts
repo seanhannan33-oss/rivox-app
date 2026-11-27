@@ -26,6 +26,10 @@ export interface Store {
   /** A member's synced app data (check-ins, training log), one document per part. */
   getSync(email: string, part: string): Promise<unknown | undefined>;
   putSync(email: string, part: string, data: unknown, updatedAt: number): Promise<void>;
+  /** Marks or unmarks that a member checked in on a day (their local date, YYYY-MM-DD). */
+  setCheckin(email: string, day: string, done: boolean): Promise<void>;
+  /** How many members checked in on a day. */
+  countCheckins(day: string): Promise<number>;
   /** Removes everything held about one email. Used by account deletion. */
   deleteMemberData(email: string): Promise<void>;
 }
@@ -36,6 +40,7 @@ export class MemoryStore implements Store {
   private drops = new Map<string, Drop>();
   private usage = new Map<string, number>();
   private sync = new Map<string, unknown>();
+  private checkins = new Map<string, Set<string>>();
 
   async getCode(email: string) {
     return this.codes.get(email);
@@ -76,7 +81,17 @@ export class MemoryStore implements Store {
   async putSync(email: string, part: string, data: unknown) {
     this.sync.set(`${email}|${part}`, data);
   }
+  async setCheckin(email: string, day: string, done: boolean) {
+    const set = this.checkins.get(day) ?? new Set<string>();
+    if (done) set.add(email);
+    else set.delete(email);
+    this.checkins.set(day, set);
+  }
+  async countCheckins(day: string) {
+    return this.checkins.get(day)?.size ?? 0;
+  }
   async deleteMemberData(email: string) {
+    for (const set of this.checkins.values()) set.delete(email);
     this.codes.delete(email);
     this.members.delete(email);
     for (const map of [this.usage, this.sync] as Map<string, unknown>[]) {

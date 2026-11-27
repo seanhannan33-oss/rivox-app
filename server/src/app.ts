@@ -180,6 +180,25 @@ export function createApp(deps: Deps) {
     return c.json({ ok: true });
   });
 
+  // Today's check-in. Only a yes/no per member per day is kept, and only the total is ever sent back.
+  // The day is the member's own calendar date, so it has to be within a day of ours.
+  const dayAllowed = (day: unknown): day is string => {
+    if (typeof day !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(day)) return false;
+    const t = Date.parse(`${day}T12:00:00Z`);
+    return !Number.isNaN(t) && Math.abs(t - now()) <= 36 * 3_600_000;
+  };
+
+  app.put("/checkin", async (c) => {
+    const address = sessionEmail(c);
+    if (!address) return c.json({ error: "unauthorized" }, 401);
+    const member = await store.getMember(address);
+    if (!member || !member.access.allowed) return c.json({ error: "members_only" }, 403);
+    const body = (await c.req.json().catch(() => null)) as { day?: unknown; done?: unknown } | null;
+    if (!dayAllowed(body?.day) || typeof body?.done !== "boolean") return c.json({ error: "invalid_request" }, 400);
+    await store.setCheckin(address, body.day, body.done);
+    return c.json({ count: await store.countCheckins(body.day) });
+  });
+
   // Account deletion. Wipes everything we hold for this email. It does not touch
   // their Rivox subscription, which lives in Loop and Shopify.
   app.delete("/me", async (c) => {

@@ -116,3 +116,36 @@ export function tagLink(url: string): string {
   const sep = base!.includes("?") ? "&" : "?";
   return `${base}${sep}utm_source=rivox_app&utm_medium=app&utm_campaign=drops${hash ? `#${hash}` : ""}`;
 }
+
+/** The longest run of checked-in days anywhere in the log. Badges are earned on this, so a missed day never takes one back. */
+export function bestStreak(log: DayLog): number {
+  const days = Object.keys(log)
+    .filter((k) => checkedIn(log[k]))
+    .sort();
+  let best = 0;
+  let run = 0;
+  let prev: string | null = null;
+  for (const d of days) {
+    run = prev !== null && daysBetween(prev, d) === 1 ? run + 1 : 1;
+    if (run > best) best = run;
+    prev = d;
+  }
+  return best;
+}
+
+/** The badge they hit today, if today's check-in is the one that got them there. */
+export function badgeEarnedToday(log: DayLog, today: string): number | null {
+  if (!checkedIn(log[today])) return null;
+  const now = streak(log, today);
+  return (BADGES as readonly number[]).includes(now) ? now : null;
+}
+
+/** Don't show a crowd number until there's a crowd. */
+export const MIN_CROWD = 5;
+
+export function crowdLine(count: number | null, doneToday: boolean): string | null {
+  if (count === null) return null;
+  const others = Math.max(0, count - (doneToday ? 1 : 0));
+  if (others < MIN_CROWD) return null;
+  return doneToday ? `You and ${others} others checked in today.` : `${others} beat you to it today.`;
+}

@@ -55,6 +55,13 @@ export class PostgresStore implements Store {
         updated_at bigint NOT NULL,
         PRIMARY KEY (email, part)
       )`);
+    await this.db.query(`
+      CREATE TABLE IF NOT EXISTS checkins (
+        email text NOT NULL,
+        day   text NOT NULL,
+        PRIMARY KEY (email, day)
+      )`);
+    await this.db.query("CREATE INDEX IF NOT EXISTS checkins_day ON checkins (day)");
   }
 
   async getCode(email: string): Promise<StoredCode | undefined> {
@@ -147,8 +154,21 @@ export class PostgresStore implements Store {
     );
   }
 
+  async setCheckin(email: string, day: string, done: boolean): Promise<void> {
+    if (done) {
+      await this.db.query("INSERT INTO checkins (email, day) VALUES ($1, $2) ON CONFLICT DO NOTHING", [email, day]);
+    } else {
+      await this.db.query("DELETE FROM checkins WHERE email = $1 AND day = $2", [email, day]);
+    }
+  }
+
+  async countCheckins(day: string): Promise<number> {
+    const { rows } = await this.db.query("SELECT count(*)::int AS n FROM checkins WHERE day = $1", [day]);
+    return Number(rows[0]?.n ?? 0);
+  }
+
   async deleteMemberData(email: string): Promise<void> {
-    for (const table of ["sign_in_codes", "members", "usage_counts", "sync_docs"]) {
+    for (const table of ["sign_in_codes", "members", "usage_counts", "sync_docs", "checkins"]) {
       await this.db.query(`DELETE FROM ${table} WHERE email = $1`, [email]);
     }
   }

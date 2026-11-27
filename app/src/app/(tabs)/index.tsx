@@ -1,7 +1,18 @@
 import { useState } from "react";
 import { Alert, Image, ImageBackground, Pressable, StyleSheet, Text, View } from "react-native";
 import { Body, Button, Label, Screen } from "../../components/ui";
-import { dayLine, dayNumber, daysUntil, earliestStart, inDays, nextBadge, toggleHabit } from "../../lib/days";
+import {
+  BADGES,
+  checkedIn,
+  crowdLine,
+  dayLine,
+  dayNumber,
+  daysUntil,
+  earliestStart,
+  inDays,
+  nextBadge,
+  toggleHabit,
+} from "../../lib/days";
 import { useDayLog } from "../../lib/useDayLog";
 import { errorMessage, type ProductDetail } from "../../api";
 import { useSession } from "../../session";
@@ -17,7 +28,7 @@ const MG_PER_POUCH = 60;
 
 export default function Today() {
   const { email, access, signOut, deleteAccount } = useSession();
-  const { ready, entry, streak, today, firstDay, update } = useDayLog();
+  const { ready, entry, streak, best, earnedToday, crowd, today, firstDay, update } = useDayLog();
   const products = access?.products ?? [];
   const hasNoCurfew = products.includes("no_curfew");
   const hasPouches = products.includes("pouches");
@@ -55,6 +66,7 @@ export default function Today() {
   const badge = nextBadge(streak);
   const streakLine =
     `${streak} day streak.` + (badge ? ` Next badge: day ${badge}.` : " You ran out of badges. Show-off.");
+  const crowdText = crowdLine(crowd, checkedIn(entry));
 
   return (
     <Screen bottomInset={false} flush>
@@ -79,6 +91,25 @@ export default function Today() {
         </View>
         <Body>{dayLine(day)}</Body>
         <Text style={s.streak}>{streakLine}</Text>
+        {crowdText ? <Text style={s.crowd}>{crowdText}</Text> : null}
+
+        {earnedToday ? (
+          <View style={s.earned} accessibilityRole="alert">
+            <Text style={s.earnedTitle}>DAY {earnedToday} BADGE. EARNED.</Text>
+            <Text style={s.earnedLine}>{earnedToday} days straight. Don't make it weird. Show up tomorrow.</Text>
+          </View>
+        ) : null}
+
+        <View style={s.badges} accessibilityLabel={`Badges earned: ${BADGES.filter((b) => best >= b).length} of ${BADGES.length}`}>
+          {BADGES.map((b) => {
+            const got = best >= b;
+            return (
+              <View key={b} style={[s.badge, got && s.badgeGot]}>
+                <Text style={[s.badgeNum, got && s.badgeNumGot]}>{b}</Text>
+              </View>
+            );
+          })}
+        </View>
 
         {hasNoCurfew ? (
           <View style={s.card}>
@@ -243,6 +274,29 @@ const s = StyleSheet.create({
   dayWord: { fontFamily: fonts.headline, color: colors.text, fontSize: 44, marginRight: 12 },
   dayNum: { fontFamily: fonts.headline, color: colors.yellow, fontSize: 84, lineHeight: 88 },
   streak: { fontFamily: fonts.bold, color: colors.text, fontSize: 14, marginTop: 10 },
+  crowd: { fontFamily: fonts.medium, color: colors.secondary, fontSize: 14, marginTop: 4 },
+  earned: {
+    backgroundColor: colors.yellow,
+    borderRadius: radius.md,
+    padding: 16,
+    marginTop: 16,
+  },
+  earnedTitle: { fontFamily: fonts.headline, color: colors.ink, fontSize: 24 },
+  earnedLine: { fontFamily: fonts.medium, color: colors.ink, fontSize: 14, marginTop: 2 },
+  badges: { flexDirection: "row", gap: 6, marginTop: 16 },
+  badge: {
+    flex: 1,
+    height: 40,
+    alignItems: "center",
+    justifyContent: "center",
+    borderRadius: radius.sm,
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: colors.panel,
+  },
+  badgeGot: { backgroundColor: colors.yellow, borderColor: colors.yellow },
+  badgeNum: { fontFamily: fonts.headline, color: colors.muted, fontSize: 15 },
+  badgeNumGot: { color: colors.ink },
   card: {
     backgroundColor: colors.panel,
     borderWidth: 1,

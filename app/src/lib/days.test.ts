@@ -2,6 +2,9 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import {
   addDays,
+  badgeEarnedToday,
+  bestStreak,
+  crowdLine,
   dateKey,
   dayNumber,
   daysBetween,
@@ -97,4 +100,37 @@ test("tagLink adds app tags once and keeps the rest of the link", () => {
     "https://rivoxlabs.com/pages/x?utm_source=rivox_app&utm_medium=app&utm_campaign=drops#top",
   );
   assert.equal(tagLink("https://rivoxlabs.com/?utm_source=email"), "https://rivoxlabs.com/?utm_source=email");
+});
+
+const run = (from: string, n: number) => {
+  const log: Record<string, { caps: boolean }> = {};
+  for (let i = 0; i < n; i++) log[addDays(from, i)] = { caps: true };
+  return log;
+};
+
+test("bestStreak finds the longest run and survives a later miss", () => {
+  assert.equal(bestStreak({}), 0);
+  assert.equal(bestStreak(run("2026-11-01", 7)), 7);
+  const log = { ...run("2026-10-01", 14), ...run("2026-11-20", 3) }; // 14, a gap, then 3
+  assert.equal(bestStreak(log), 14);
+  assert.equal(streak(log, "2026-11-22"), 3);
+  assert.equal(bestStreak({ "2026-11-01": { caps: true }, "2026-11-02": { habits: ["sleep"] }, "2026-11-03": { caps: true } }), 1);
+  assert.equal(bestStreak(run("2026-12-28", 6)), 6); // across a year end
+});
+
+test("a badge is earned on the day the streak lands on it, not before or after", () => {
+  assert.equal(badgeEarnedToday(run("2026-11-01", 7), "2026-11-07"), 7);
+  assert.equal(badgeEarnedToday(run("2026-11-01", 6), "2026-11-06"), null);
+  assert.equal(badgeEarnedToday(run("2026-11-01", 8), "2026-11-08"), null);
+  assert.equal(badgeEarnedToday(run("2026-11-01", 6), "2026-11-07"), null); // today not done yet
+  assert.equal(badgeEarnedToday(run("2026-11-01", 30), "2026-11-30"), 30);
+});
+
+test("the crowd line only appears when there's a real crowd", () => {
+  assert.equal(crowdLine(null, false), null);
+  assert.equal(crowdLine(3, false), null);
+  assert.equal(crowdLine(5, false), "5 beat you to it today.");
+  assert.equal(crowdLine(5, true), null); // that's only 4 others
+  assert.equal(crowdLine(313, true), "You and 312 others checked in today.");
+  assert.equal(crowdLine(312, false), "312 beat you to it today.");
 });

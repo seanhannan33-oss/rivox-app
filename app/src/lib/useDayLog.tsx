@@ -1,7 +1,8 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
 import { AppState } from "react-native";
 import { useSession } from "../session";
-import { dateKey, prune, streak, type DayEntry } from "./days";
+import { putCheckin } from "../api";
+import { badgeEarnedToday, bestStreak, checkedIn, dateKey, prune, streak, type DayEntry } from "./days";
 import { mergeDays, readDays, type DaysDoc } from "./sync";
 import { useSyncedDoc } from "./useSyncedDoc";
 
@@ -15,6 +16,12 @@ interface DayLogValue {
   firstDay: string;
   entry: DayEntry;
   streak: number;
+  /** Longest run ever. Badges are earned on this. */
+  best: number;
+  /** The badge today's check-in earned, if it did. */
+  earnedToday: number | null;
+  /** Members who've checked in today, this one included. Null until the server answers. */
+  crowd: number | null;
   update: (change: (entry: DayEntry | undefined) => DayEntry) => void;
 }
 
@@ -57,6 +64,25 @@ export function DayLogProvider({ children }: { children: ReactNode }) {
     [change, today],
   );
 
+  // Tell the server whether they're checked in today, and get the real count back.
+  // One yes/no per day is all that's sent. Runs on load, on change, and on a new day.
+  const done = doc ? checkedIn(doc.log[today]) : null;
+  const [crowd, setCrowd] = useState<number | null>(null);
+  useEffect(() => {
+    if (!token || done === null) return;
+    let alive = true;
+    putCheckin(token, today, done)
+      .then((res) => {
+        if (alive) setCrowd(res.count);
+      })
+      .catch(() => {
+        // No signal: the count just doesn't show.
+      });
+    return () => {
+      alive = false;
+    };
+  }, [token, today, done]);
+
   const value = useMemo<DayLogValue>(
     () => ({
       ready,
@@ -64,9 +90,12 @@ export function DayLogProvider({ children }: { children: ReactNode }) {
       firstDay: doc?.firstDay ?? today,
       entry: doc?.log[today] ?? {},
       streak: doc ? streak(doc.log, today) : 0,
+      best: doc ? bestStreak(doc.log) : 0,
+      earnedToday: doc ? badgeEarnedToday(doc.log, today) : null,
+      crowd,
       update,
     }),
-    [ready, today, doc, update],
+    [ready, today, doc, crowd, update],
   );
 
   return <DayLogContext.Provider value={value}>{children}</DayLogContext.Provider>;

@@ -108,6 +108,15 @@ export function putSync(token: string, part: SyncPart, data: unknown): Promise<{
   });
 }
 
+/** Tells the server whether they've checked in today. Returns how many members have, them included. */
+export function putCheckin(token: string, day: string, done: boolean): Promise<{ count: number }> {
+  return call("/checkin", {
+    method: "PUT",
+    headers: { authorization: `Bearer ${token}` },
+    body: JSON.stringify({ day, done }),
+  });
+}
+
 /** Deletes everything the server holds for this account. Their subscription is not affected. */
 export function deleteAccount(token: string): Promise<{ ok: true }> {
   return call("/me", { method: "DELETE", headers: { authorization: `Bearer ${token}` } });
@@ -141,6 +150,8 @@ export function errorMessage(err: unknown): string {
       return "That photo didn't go through. Try another.";
     case "photo_failed":
       return "Couldn't read that plate. Try again, or tap a number.";
+    case "too_many_requests":
+      return "Too many tries. Give it a few minutes.";
     case "network":
       return "No connection. Find some bars and try again.";
     default:
