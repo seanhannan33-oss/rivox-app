@@ -88,7 +88,7 @@ Checks: `npm run typecheck`. Not yet run on a real phone.
 - The server awards 1 point per checked-in day plus one-time streak bonuses (`STREAK_BONUS`). The phone cannot award points.
 - Rewards: `$5 off` at 60 points and a free tin at 90 (`FIVE_OFF_COST`, `FREE_TIN_COST`).
 - Redeeming re-checks the subscription with Loop, takes the points under a per-member lock, then creates a single-use Shopify discount code tied to the member. If the code can't be made the points are returned.
-- Redeeming is off until `SHOPIFY_STORE_DOMAIN` and `SHOPIFY_ADMIN_TOKEN` are set. The token needs write_discounts, read_customers and read_products. Set `REWARD_TIN_PRODUCT_IDS` to the tin products.
+- Redeeming and the shop are off until `SHOPIFY_STORE_DOMAIN`, `SHOPIFY_CLIENT_ID` and `SHOPIFY_CLIENT_SECRET` are set (or `SHOPIFY_ADMIN_TOKEN` for a custom app made before 2026). The app needs write_discounts, read_customers, read_products and read_orders. Set `REWARD_TIN_PRODUCT_IDS` to the tin products.
 
 ## Ranks, streak saves and the shop
 
