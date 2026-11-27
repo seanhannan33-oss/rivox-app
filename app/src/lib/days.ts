@@ -96,7 +96,39 @@ export function streakInfo(log: DayLog, today: string): StreakState {
   return streakState(checkedDays(log), today);
 }
 
-export const BADGES = [7, 14, 30, 60, 90, 180, 365] as const;
+export interface Rank {
+  id: "pup" | "pack" | "hunter" | "alpha" | "nocurfew";
+  /** Streak length that earns it. */
+  days: number;
+  name: string;
+  /** Shown on the rank-up screen. */
+  line: string;
+}
+
+/** Five ranks, each earned once on the longest streak and kept for good. */
+export const RANKS: Rank[] = [
+  { id: "pup", days: 7, name: "PUP", line: "You showed up for a week. That's more than most. Barely." },
+  { id: "pack", days: 30, name: "PACK", line: "A month straight. Now it's a habit. Try not to let it go to your head." },
+  { id: "hunter", days: 60, name: "HUNTER", line: "Most guys quit before this. You're not most guys." },
+  { id: "alpha", days: 90, name: "ALPHA", line: "The full cycle. Done right. Take the crown." },
+  { id: "nocurfew", days: 365, name: "NO CURFEW", line: "A year. Almost nobody gets here. Stay out as late as you want." },
+];
+
+export const BADGES: readonly number[] = RANKS.map((r) => r.days);
+
+/** The highest rank their best streak has earned. Null before the first one. */
+export function currentRank(best: number): Rank | null {
+  return [...RANKS].reverse().find((r) => best >= r.days) ?? null;
+}
+
+/** The next rank to chase, how far off it is on the current streak, and progress from the last rank to it. */
+export function nextRank(best: number, streakNow: number): { rank: Rank; left: number; progress: number } | null {
+  const rank = RANKS.find((r) => r.days > best);
+  if (!rank) return null;
+  const from = currentRank(best)?.days ?? 0;
+  const at = Math.max(from, Math.min(streakNow, rank.days));
+  return { rank, left: Math.max(1, rank.days - streakNow), progress: (at - from) / (rank.days - from) };
+}
 
 export function nextBadge(current: number): number | null {
   return BADGES.find((b) => b > current) ?? null;
@@ -183,7 +215,7 @@ export function savesLine(state: StreakState, today: string): string | null {
 export function badgeEarnedToday(log: DayLog, today: string): number | null {
   if (!checkedIn(log[today])) return null;
   const now = streak(log, today);
-  return (BADGES as readonly number[]).includes(now) ? now : null;
+  return BADGES.includes(now) ? now : null;
 }
 
 /** Don't show a crowd number until there's a crowd. */

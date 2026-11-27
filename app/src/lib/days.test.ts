@@ -1,10 +1,12 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import {
+  RANKS,
   addDays,
   badgeEarnedToday,
   bestStreak,
   crowdLine,
+  currentRank,
   dateKey,
   dayNumber,
   daysBetween,
@@ -14,6 +16,7 @@ import {
   inDays,
   nextReward,
   nextBadge,
+  nextRank,
   prune,
   savesLine,
   streak,
@@ -210,4 +213,31 @@ test("savesLine says what matters and stays quiet otherwise", () => {
   );
   assert.equal(savesLine({ streak: 0, best: 14, saves: 0, saved: ["2026-11-26"] }, "2026-11-27"), null); // the run died anyway
   assert.equal(savesLine({ streak: 20, best: 20, saves: 1, saved: ["2026-11-10"] }, "2026-11-27"), "1 streak save banked.");
+});
+
+test("ranks: the highest one earned, and the next one to chase", () => {
+  assert.deepEqual(RANKS.map((r) => r.days), [7, 30, 60, 90, 365]);
+  assert.equal(currentRank(0), null);
+  assert.equal(currentRank(6), null);
+  assert.equal(currentRank(7)!.name, "PUP");
+  assert.equal(currentRank(41)!.name, "PACK");
+  assert.equal(currentRank(400)!.name, "NO CURFEW");
+
+  const first = nextRank(0, 3)!;
+  assert.equal(first.rank.name, "PUP");
+  assert.equal(first.left, 4);
+  assert.equal(Math.round(first.progress * 100), 43);
+
+  const mid = nextRank(41, 41)!; // PACK earned at 30, chasing HUNTER at 60
+  assert.equal(mid.rank.name, "HUNTER");
+  assert.equal(mid.left, 19);
+  assert.equal(Math.round(mid.progress * 100), 37);
+
+  // Lost the streak after earning PACK: the rank stays, the countdown restarts, the bar doesn't go negative.
+  const reset = nextRank(41, 2)!;
+  assert.equal(reset.rank.name, "HUNTER");
+  assert.equal(reset.left, 58);
+  assert.equal(reset.progress, 0);
+
+  assert.equal(nextRank(365, 365), null);
 });
