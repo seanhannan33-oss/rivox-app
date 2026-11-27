@@ -15,6 +15,7 @@ import { dropsFor, isLive, parseDrop } from "./drops.ts";
 import type { EmailSender } from "./email.ts";
 import type { LoopClient } from "./loop.ts";
 import { createSession, readSession } from "./session.ts";
+import { WindowLimiter, clientIp, forwardedCount } from "./limits.ts";
 import type { Store } from "./store.ts";
 import { MAX_IMAGE_BASE64, MEDIA_TYPES, type MealEstimator } from "./vision.ts";
 
@@ -49,6 +50,15 @@ export function createApp(deps: Deps) {
     return access;
   }
 
+  // Limits on the sign-in door. Generous for a real person, tight for a script.
+  const TEN_MIN = 10 * 60_000;
+  const codeRequestsPerIp = new WindowLimiter(20, TEN_MIN);
+  const codeChecksPerIp = new WindowLimiter(60, TEN_MIN);
+  const codeRequestsOverall = new WindowLimiter(120, 60_000); // a ceiling on email spend if someone spreads across addresses
+  const ipOf = (c: { req: { header(name: string): string | undefined } }) =>
+    clientIp(c.req.header("X-Forwarded-For"), config.trustedProxyHops);
+  const tooMany = (c: { json: (body: unknown, status: 429) => Response }) => c.json({ error: "too_many_requests" }, 429);
+
   app.get("/health", (c) => c.json({ ok: true }));
 
   // Step 1 of sign-in. Always answers the same way, whether or not the email
@@ -57,11 +67,17 @@ export function createApp(deps: Deps) {
     const body = (await c.req.json().catch(() => null)) as { email?: unknown } | null;
     const address = normalizeEmail(typeof body?.email === "string" ? body.email : "");
     if (!isValidEmail(address)) return c.json({ error: "invalid_email" }, 400);
+    const fromIp = ipOf(c);
+    if (fromIp && !codeRequestsPerIp.allow(fromIp, now())) return tooMany(c);
 
     const existing = await store.getCode(address);
     if (existing && now() - existing.sentAt < RESEND_WAIT_MS) {
       return c.json({ ok: true });
     }
+    // Past here an email actually goes out, so count it against the address and the overall ceiling.
+    const day = new Date(now()).toISOString().slice(0, 10);
+    if ((await store.bumpUsage(address, "sign_in_code", day)) > config.codeDailyLimit) return tooMany(c);
+    if (!codeRequestsOverall.allow("all", now())) return tooMany(c);
     const code = generateCode();
     await store.putCode(address, newStoredCode(address, code, config.sessionSecret, now()));
     try {
@@ -77,6 +93,8 @@ export function createApp(deps: Deps) {
 
   // Step 2 of sign-in. A correct code proves the email. Loop decides access.
   app.post("/auth/verify", async (c) => {
+    const fromIp = ipOf(c);
+    if (fromIp && !codeChecksPerIp.allow(fromIp, now())) return tooMany(c);
     const body = (await c.req.json().catch(() => null)) as { email?: unknown; code?: unknown } | null;
     const address = normalizeEmail(typeof body?.email === "string" ? body.email : "");
     const code = typeof body?.code === "string" ? body.code.trim() : "";
@@ -229,6 +247,13 @@ export function createApp(deps: Deps) {
     c.header("Referrer-Policy", "no-referrer");
     c.header("Content-Security-Policy", "default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; connect-src 'self'; form-action 'none'; base-uri 'none'");
     return c.html(ADMIN_PAGE);
+  });
+
+  // Lets the owner confirm the server sees real visitor addresses, which the sign-in limits rely on.
+  app.get("/admin/whoami", (c) => {
+    if (!isAdmin(c)) return c.json({ error: "unauthorized" }, 401);
+    const header = c.req.header("X-Forwarded-For");
+    return c.json({ ip: clientIp(header, config.trustedProxyHops), forwarded: forwardedCount(header), trustedHops: config.trustedProxyHops });
   });
 
   app.get("/admin/drops", async (c) => {

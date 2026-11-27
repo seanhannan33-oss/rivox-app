@@ -29,6 +29,8 @@ const config: Config = {
   anthropicApiKey: "",
   visionModel: "test-model",
   photoDailyLimit: 2,
+  trustedProxyHops: 1,
+  codeDailyLimit: 4,
 };
 
 function setup(subsByEmail: Record<string, Subscription[]> = {}, meals?: MealEstimator) {
@@ -404,4 +406,61 @@ test("deleting the account wipes everything held for that email", async () => {
   assert.equal(((await (await app.request("/sync/train", { headers: auth })).json()) as any).data, null);
   // Someone else's data is untouched.
   assert.deepEqual(((await (await app.request("/sync/days", { headers: otherAuth })).json()) as any).data, { keep: 1 });
+});
+
+// ---- Rate limits ----
+
+test("one address can't request codes without end", async () => {
+  const { app } = setup();
+  const ask = (i: number, ip: string) =>
+    app.request("/auth/request-code", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "X-Forwarded-For": ip },
+      body: JSON.stringify({ email: `p${i}@example.com` }),
+    });
+  for (let i = 0; i < 20; i++) assert.equal((await ask(i, "1.1.1.1")).status, 200);
+  const blocked = await ask(99, "1.1.1.1");
+  assert.equal(blocked.status, 429);
+  assert.equal(((await blocked.json()) as any).error, "too_many_requests");
+  assert.equal((await ask(100, "2.2.2.2")).status, 200); // someone else is unaffected
+  // Faking the front of the header doesn't get around it.
+  assert.equal((await ask(101, "7.7.7.7, 1.1.1.1")).status, 429);
+});
+
+test("one email gets a limited number of codes a day", async () => {
+  const { app, sent, clock } = setup();
+  const ask = (ip: string) =>
+    app.request("/auth/request-code", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "X-Forwarded-For": ip },
+      body: JSON.stringify({ email: "dan@example.com" }),
+    });
+  for (let i = 0; i < 4; i++) {
+    assert.equal((await ask(`3.3.3.${i}`)).status, 200);
+    clock.t += 61_000; // past the resend wait each time
+  }
+  assert.equal(sent.length, 4);
+  assert.equal((await ask("3.3.3.9")).status, 429);
+  assert.equal(sent.length, 4); // no fifth email went out
+  clock.t += 24 * 3_600_000;
+  assert.equal((await ask("3.3.3.10")).status, 200); // new day
+});
+
+test("code guessing from one address is cut off", async () => {
+  const { app } = setup();
+  const guess = () =>
+    app.request("/auth/verify", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "X-Forwarded-For": "4.4.4.4" },
+      body: JSON.stringify({ email: "dan@example.com", code: "000000" }),
+    });
+  for (let i = 0; i < 60; i++) assert.notEqual((await guess()).status, 429);
+  assert.equal((await guess()).status, 429);
+});
+
+test("the admin can see which address the server thinks they are", async () => {
+  const { app } = setup();
+  const res = await app.request("/admin/whoami", { headers: { ...ADMIN, "X-Forwarded-For": "9.9.9.9, 5.5.5.5" } });
+  assert.deepEqual(await res.json(), { ip: "5.5.5.5", forwarded: 2, trustedHops: 1 });
+  assert.equal((await app.request("/admin/whoami")).status, 401);
 });

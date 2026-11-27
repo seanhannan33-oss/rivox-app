@@ -96,6 +96,7 @@ export const ADMIN_PAGE = String.raw`<!doctype html>
     <h2>Posted</h2>
     <div id="list"></div>
     <p class="hint" id="empty" hidden>Nothing posted yet.</p>
+    <p class="hint" id="whoami" style="margin-top:32px"></p>
   </section>
 </main>
 <script>
@@ -203,6 +204,9 @@ export const ADMIN_PAGE = String.raw`<!doctype html>
     $("unlock").disabled = true;
     load().then(function () {
       $("token").value = ""; $("gate").hidden = true; $("app").hidden = false;
+      api("GET", "/admin/whoami").then(function (w) {
+        $("whoami").textContent = "Server sees you at " + (w.ip || "an unknown address") + " (" + w.forwarded + " forwarded, trusting " + w.trustedHops + "). This should match your own IP address.";
+      }).catch(function () {});
     }).catch(function (e) { token = ""; say("gateMsg", e.message, false); })
       .finally(function () { $("unlock").disabled = false; });
   };

@@ -24,6 +24,10 @@ export interface Config {
   visionModel: string;
   /** Meal photos one member can send per day. */
   photoDailyLimit: number;
+  /** Proxies between the internet and this server. Used to find the caller's real address. */
+  trustedProxyHops: number;
+  /** Sign-in codes one email can be sent per day. */
+  codeDailyLimit: number;
 }
 
 function list(value: string | undefined): string[] {
@@ -66,5 +70,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
     anthropicApiKey: (env.ANTHROPIC_API_KEY ?? "").trim(),
     visionModel: (env.VISION_MODEL ?? "claude-haiku-5-5").trim(),
     photoDailyLimit: Math.max(1, Number(env.PHOTO_DAILY_LIMIT ?? 12) || 12),
+    trustedProxyHops: Math.max(1, Number(env.TRUSTED_PROXY_HOPS ?? 1) || 1),
+    codeDailyLimit: Math.max(1, Number(env.CODE_DAILY_LIMIT ?? 10) || 10),
   };
 }
