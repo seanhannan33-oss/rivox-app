@@ -14,13 +14,23 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { colors, fonts, radius } from "../theme";
 
 /** Navy page with the pink bar across the top, same as the site. */
-export function Screen({ children }: { children: ReactNode }) {
+export function Screen({
+  children,
+  bottomInset = true,
+  flush = false,
+}: {
+  children: ReactNode;
+  /** Off inside tabs, where the tab bar already clears the home indicator. */
+  bottomInset?: boolean;
+  /** No side padding, for screens with an edge-to-edge banner. */
+  flush?: boolean;
+}) {
   return (
     <View style={s.root}>
-      <SafeAreaView style={s.flex} edges={["top", "bottom"]}>
+      <SafeAreaView style={s.flex} edges={bottomInset ? ["top", "bottom"] : ["top"]}>
         <View style={s.pinkBar} />
         <KeyboardAvoidingView style={s.flex} behavior={Platform.OS === "ios" ? "padding" : undefined}>
-          <ScrollView contentContainerStyle={s.content} keyboardShouldPersistTaps="handled">
+          <ScrollView contentContainerStyle={[s.content, flush && s.flush]} keyboardShouldPersistTaps="handled">
             {children}
           </ScrollView>
         </KeyboardAvoidingView>
@@ -92,6 +102,7 @@ const s = StyleSheet.create({
   flex: { flex: 1 },
   pinkBar: { height: 6, backgroundColor: colors.pink },
   content: { flexGrow: 1, padding: 24, paddingBottom: 40 },
+  flush: { paddingHorizontal: 0, paddingTop: 0 },
   headline: { fontFamily: fonts.headline, color: colors.text, fontSize: 44, lineHeight: 46 },
   body: { fontFamily: fonts.body, color: colors.secondary, fontSize: 16, lineHeight: 24 },
   label: { fontFamily: fonts.bold, color: colors.muted, fontSize: 12, letterSpacing: 1.2 },
