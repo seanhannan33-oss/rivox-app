@@ -90,6 +90,7 @@ const shopify = {
   siteUrl: "https://rivoxlabs.com",
   tinProductIds: ["11", "22"],
   redirectPath: "/products/tin",
+  hiddenProductIds: [],
 };
 
 function fakeShopify(opts: { customer?: string | null; userErrors?: { message: string }[]; status?: number } = {}) {

@@ -1,5 +1,6 @@
 // Turning a redeemed reward into something the member can use: a one-time Shopify discount code.
 import { randomBytes } from "node:crypto";
+import { shopifyGql, type Gql, type ShopifyConfig } from "./shopify.ts";
 
 export interface IssuedReward {
   code: string;
@@ -10,19 +11,6 @@ export interface IssuedReward {
 export interface RewardIssuer {
   /** Creates a single-use code for this member and reward. Throws if it can't. */
   issue(rewardId: string, email: string): Promise<IssuedReward>;
-}
-
-export interface ShopifyConfig {
-  /** e.g. your-store.myshopify.com */
-  storeDomain: string;
-  adminToken: string;
-  apiVersion: string;
-  /** Storefront address the member is sent to, e.g. https://rivoxlabs.com */
-  siteUrl: string;
-  /** Shopify product IDs a free tin can be claimed from. */
-  tinProductIds: string[];
-  /** Where the free tin link lands after applying the code. */
-  redirectPath: string;
 }
 
 /** Dollars off for the money-off reward. */
@@ -60,27 +48,14 @@ const CREATE = `mutation($discount: DiscountCodeBasicInput!) {
  * is worth the price of one tin and only applies to the tin products.
  */
 export class ShopifyRewardIssuer implements RewardIssuer {
+  private readonly gql: Gql;
+
   constructor(
     private readonly config: ShopifyConfig,
-    private readonly doFetch: Fetch = fetch,
+    doFetch: Fetch = fetch,
     private readonly now: () => number = Date.now,
-  ) {}
-
-  private async gql<T>(query: string, variables: unknown): Promise<T> {
-    const { storeDomain, apiVersion, adminToken } = this.config;
-    const res = await this.doFetch(`https://${storeDomain}/admin/api/${apiVersion}/graphql.json`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json", "X-Shopify-Access-Token": adminToken },
-      body: JSON.stringify({ query, variables }),
-    });
-    if (!res.ok) {
-      const detail = (await res.text().catch(() => "")).slice(0, 300);
-      throw new Error(`Shopify responded ${res.status}. ${detail}`);
-    }
-    const body = (await res.json()) as { data?: T; errors?: { message?: string }[] };
-    if (body.errors?.length) throw new Error(`Shopify error: ${body.errors.map((e) => e.message).join("; ").slice(0, 300)}`);
-    if (!body.data) throw new Error("Shopify sent no data.");
-    return body.data;
+  ) {
+    this.gql = shopifyGql(config, doFetch);
   }
 
   issue(rewardId: string, email: string): Promise<IssuedReward> {

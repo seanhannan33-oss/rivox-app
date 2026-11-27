@@ -1,5 +1,5 @@
 import { rulesFromEnv, type PointsRules } from "./points.ts";
-import type { ShopifyConfig } from "./rewards.ts";
+import type { ShopifyConfig } from "./shopify.ts";
 export interface Config {
   port: number;
   sessionSecret: string;
@@ -88,6 +88,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
       siteUrl: (env.SITE_URL ?? "https://rivoxlabs.com").trim(),
       tinProductIds: list(env.REWARD_TIN_PRODUCT_IDS ?? ""),
       redirectPath: (env.REWARD_TIN_PATH ?? "/collections/all").trim(),
+      hiddenProductIds: list(env.SHOP_HIDE_PRODUCT_IDS ?? ""),
     },
   };
 }

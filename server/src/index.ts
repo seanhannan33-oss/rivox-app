@@ -6,6 +6,7 @@ import { HttpLoopClient } from "./loop.ts";
 import { PostgresStore, createPool } from "./pg-store.ts";
 import { ExpoPushSender } from "./push.ts";
 import { ShopifyRewardIssuer, type RewardIssuer } from "./rewards.ts";
+import { ShopifyShop, type Shop } from "./shop.ts";
 import { MemoryStore, type Store } from "./store.ts";
 import { AnthropicMealEstimator, type MealEstimator } from "./vision.ts";
 
@@ -44,14 +45,16 @@ if (config.anthropicApiKey) {
 }
 
 let rewards: RewardIssuer | undefined;
+let shop: Shop | undefined;
 if (config.shopify.adminToken && config.shopify.storeDomain) {
   rewards = new ShopifyRewardIssuer(config.shopify);
-  console.log(`Rewards: on (codes created in ${config.shopify.storeDomain}).`);
+  shop = new ShopifyShop(config.shopify);
+  console.log(`Rewards and shop: on (${config.shopify.storeDomain}).`);
 } else {
-  console.warn("Rewards: points add up, but redeeming is off. Set SHOPIFY_STORE_DOMAIN and SHOPIFY_ADMIN_TOKEN to switch it on.");
+  console.warn("Rewards and shop: off. Points still add up. Set SHOPIFY_STORE_DOMAIN and SHOPIFY_ADMIN_TOKEN to switch them on.");
 }
 
-const app = createApp({ config, store, loop: new HttpLoopClient(config.loop), email, meals, push: new ExpoPushSender(config.expoAccessToken), rewards });
+const app = createApp({ config, store, loop: new HttpLoopClient(config.loop), email, meals, push: new ExpoPushSender(config.expoAccessToken), rewards, shop });
 
 serve({ fetch: app.fetch, port: config.port }, (info) => {
   console.log(`Rivox app server listening on port ${info.port}`);

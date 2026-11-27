@@ -7,6 +7,7 @@ import type { Config } from "../src/config.ts";
 import { MemoryStore } from "../src/store.ts";
 import type { PushMessage } from "../src/push.ts";
 import type { RewardIssuer } from "../src/rewards.ts";
+import type { Shop } from "../src/shop.ts";
 import type { MealEstimator } from "../src/vision.ts";
 
 const config: Config = {
@@ -42,10 +43,15 @@ const config: Config = {
       { id: "free_tin", title: "FREE TIN", blurb: "", cost: 5 },
     ],
   },
-  shopify: { storeDomain: "", adminToken: "", apiVersion: "x", siteUrl: "https://rivoxlabs.com", tinProductIds: [], redirectPath: "/" },
+  shopify: { storeDomain: "", adminToken: "", apiVersion: "x", siteUrl: "https://rivoxlabs.com", tinProductIds: [], redirectPath: "/", hiddenProductIds: [] },
 };
 
-function setup(subsByEmail: Record<string, Subscription[]> = {}, meals?: MealEstimator, rewards?: RewardIssuer) {
+function setup(
+  subsByEmail: Record<string, Subscription[]> = {},
+  meals?: MealEstimator,
+  rewards?: RewardIssuer,
+  shop?: Shop,
+) {
   const sent: { to: string; code: string }[] = [];
   const pushed: { tokens: string[]; message: PushMessage }[] = [];
   const clock = { t: 1_800_000_000_000 };
@@ -55,6 +61,7 @@ function setup(subsByEmail: Record<string, Subscription[]> = {}, meals?: MealEst
     store: new MemoryStore(),
     meals,
     rewards,
+    shop,
     push: {
       send: async (tokens, message) => {
         pushed.push({ tokens, message });
@@ -786,4 +793,41 @@ test("deleting the account wipes points and claimed rewards", async () => {
   const after = await r.rewards("a@example.com");
   assert.equal(after.points, 0);
   assert.deepEqual(after.claimed, []);
+});
+
+// ---- Shop ----
+
+test("the shop shows products and only the member's own orders", async () => {
+  const asked: string[] = [];
+  const shop: Shop = {
+    products: async () => [{ id: "1", title: "Cool Mint", image: null, url: "https://rivoxlabs.com/products/x", variants: [{ id: "11", title: "", price: "7.99", available: true }] }],
+    orders: async (email) => {
+      asked.push(email);
+      return [{ name: "#1001", placedAt: 1, status: "shipped", total: "20.37", items: [], tracking: null, statusUrl: null }];
+    },
+  };
+  const { app, signIn } = setup({ "a@example.com": [active("111")] }, undefined, undefined, shop);
+  const auth = { Authorization: `Bearer ${(await signIn("a@example.com")).body.token}` };
+  const products = (await (await app.request("/shop/products", { headers: auth })).json()) as any;
+  assert.equal(products.products[0].title, "Cool Mint");
+  assert.equal(products.site, "https://rivoxlabs.com");
+  const orders = (await (await app.request("/shop/orders?email=someone-else@example.com", { headers: auth })).json()) as any;
+  assert.equal(orders.orders[0].name, "#1001");
+  assert.deepEqual(asked, ["a@example.com"]); // the address comes from the session, never from the request
+  assert.equal((await app.request("/shop/products")).status, 401);
+  assert.equal((await app.request("/shop/orders")).status, 401);
+});
+
+test("the shop is off without a key, and a Shopify failure is reported plainly", async () => {
+  const off = setup({ "a@example.com": [active("111")] });
+  const a = { Authorization: `Bearer ${(await off.signIn("a@example.com")).body.token}` };
+  const res = await off.app.request("/shop/products", { headers: a });
+  assert.equal(res.status, 503);
+  assert.equal(((await res.json()) as any).error, "shop_unavailable");
+
+  const broken: Shop = { products: async () => Promise.reject(new Error("down")), orders: async () => Promise.reject(new Error("down")) };
+  const b = setup({ "a@example.com": [active("111")] }, undefined, undefined, broken);
+  const auth = { Authorization: `Bearer ${(await b.signIn("a@example.com")).body.token}` };
+  assert.equal((await b.app.request("/shop/products", { headers: auth })).status, 502);
+  assert.equal((await b.app.request("/shop/orders", { headers: auth })).status, 502);
 });

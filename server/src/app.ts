@@ -20,6 +20,7 @@ import { WindowLimiter, clientIp, forwardedCount } from "./limits.ts";
 import { bonusesFor, streakState } from "./points.ts";
 import { inAudience, isPushToken, parsePush, type PushSender } from "./push.ts";
 import type { RewardIssuer } from "./rewards.ts";
+import type { Shop } from "./shop.ts";
 import type { Store } from "./store.ts";
 import { MAX_IMAGE_BASE64, MEDIA_TYPES, type MealEstimator } from "./vision.ts";
 
@@ -36,6 +37,8 @@ export interface Deps {
   push: PushSender;
   /** Missing when reward codes can't be issued yet (no Shopify key). Points still add up. */
   rewards?: RewardIssuer;
+  /** Missing until the Shopify key is set. */
+  shop?: Shop;
   now?: () => number;
 }
 
@@ -263,6 +266,31 @@ export function createApp(deps: Deps) {
       await store.removePoints(address, "redeem", id); // hand the points back
       console.error("Issuing a reward failed:", err);
       return c.json({ error: "reward_failed" }, 502);
+    }
+  });
+
+  // The in-app shop. Members see what's for sale and their own orders, nothing else.
+  app.get("/shop/products", async (c) => {
+    const address = sessionEmail(c);
+    if (!address) return c.json({ error: "unauthorized" }, 401);
+    if (!deps.shop) return c.json({ error: "shop_unavailable" }, 503);
+    try {
+      return c.json({ products: await deps.shop.products(), site: config.shopify.siteUrl });
+    } catch (err) {
+      console.error("Loading shop products failed:", err);
+      return c.json({ error: "shop_failed" }, 502);
+    }
+  });
+
+  app.get("/shop/orders", async (c) => {
+    const address = sessionEmail(c); // orders are looked up by the email they proved they own
+    if (!address) return c.json({ error: "unauthorized" }, 401);
+    if (!deps.shop) return c.json({ error: "shop_unavailable" }, 503);
+    try {
+      return c.json({ orders: await deps.shop.orders(address) });
+    } catch (err) {
+      console.error("Loading orders failed:", err);
+      return c.json({ error: "shop_failed" }, 502);
     }
   });
 
