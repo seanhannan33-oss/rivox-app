@@ -5,6 +5,7 @@ import { ConsoleEmailSender, ResendEmailSender, type EmailSender } from "./email
 import { HttpLoopClient } from "./loop.ts";
 import { PostgresStore, createPool } from "./pg-store.ts";
 import { ExpoPushSender } from "./push.ts";
+import { ShopifyRewardIssuer, type RewardIssuer } from "./rewards.ts";
 import { MemoryStore, type Store } from "./store.ts";
 import { AnthropicMealEstimator, type MealEstimator } from "./vision.ts";
 
@@ -42,7 +43,15 @@ if (config.anthropicApiKey) {
   console.warn("Meal photos: off. Set ANTHROPIC_API_KEY to switch them on.");
 }
 
-const app = createApp({ config, store, loop: new HttpLoopClient(config.loop), email, meals, push: new ExpoPushSender(config.expoAccessToken) });
+let rewards: RewardIssuer | undefined;
+if (config.shopify.adminToken && config.shopify.storeDomain) {
+  rewards = new ShopifyRewardIssuer(config.shopify);
+  console.log(`Rewards: on (codes created in ${config.shopify.storeDomain}).`);
+} else {
+  console.warn("Rewards: points add up, but redeeming is off. Set SHOPIFY_STORE_DOMAIN and SHOPIFY_ADMIN_TOKEN to switch it on.");
+}
+
+const app = createApp({ config, store, loop: new HttpLoopClient(config.loop), email, meals, push: new ExpoPushSender(config.expoAccessToken), rewards });
 
 serve({ fetch: app.fetch, port: config.port }, (info) => {
   console.log(`Rivox app server listening on port ${info.port}`);

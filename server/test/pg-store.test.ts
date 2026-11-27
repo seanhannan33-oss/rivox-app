@@ -127,3 +127,44 @@ test("push tokens: register, move to a new owner, list, remove, wiped with the m
   await store.deleteMemberData("a@b.co");
   assert.deepEqual(await store.listPushTokens(), [{ email: "c@b.co", token: "T1" }]);
 });
+
+test("points: awarded once per reason, spent only when covered, even under a race", { skip }, async () => {
+  await pool.query("TRUNCATE points_ledger, redemptions, checkins");
+  assert.equal(await store.addPoints("a@b.co", "checkin", "2026-11-27", 1, 1), true);
+  assert.equal(await store.addPoints("a@b.co", "checkin", "2026-11-27", 1, 1), false);
+  assert.equal(await store.addPoints("a@b.co", "streak", "7", 4, 1), true);
+  assert.equal(await store.addPoints("z@b.co", "checkin", "2026-11-27", 1, 1), true);
+  assert.equal(await store.pointsBalance("a@b.co"), 5);
+  assert.equal(await store.pointsBalance("nobody@b.co"), 0);
+
+  assert.equal(await store.spendPoints("a@b.co", 6, "r0", 2), false);
+  // Ten claims at once for 3 points each, with 5 in the bank: exactly one wins.
+  const results = await Promise.all(Array.from({ length: 10 }, (_, i) => store.spendPoints("a@b.co", 3, `r${i + 1}`, 2)));
+  assert.equal(results.filter(Boolean).length, 1);
+  assert.equal(await store.pointsBalance("a@b.co"), 2);
+
+  await store.removePoints("a@b.co", "streak", "7");
+  assert.equal(await store.pointsBalance("a@b.co"), -2); // the store reports the truth; the routes guard against this
+  assert.equal(await store.pointsBalance("z@b.co"), 1);
+});
+
+test("check-in days list newest first, and redemptions save and wipe with the member", { skip }, async () => {
+  await pool.query("TRUNCATE points_ledger, redemptions, checkins");
+  for (const d of ["2026-11-25", "2026-11-27", "2026-11-26"]) await store.setCheckin("a@b.co", d, true);
+  await store.setCheckin("z@b.co", "2026-11-27", true);
+  assert.deepEqual(await store.listCheckinDays("a@b.co", 400), ["2026-11-27", "2026-11-26", "2026-11-25"]);
+  assert.deepEqual(await store.listCheckinDays("a@b.co", 2), ["2026-11-27", "2026-11-26"]);
+
+  const base = { email: "a@b.co", rewardId: "free_tin", title: "FREE TIN", cost: 90, url: "https://rivoxlabs.com/discount/X" };
+  await store.putRedemption({ ...base, id: "1", code: "X1", createdAt: 1 });
+  await store.putRedemption({ ...base, id: "2", code: "X2", createdAt: 2 });
+  await store.putRedemption({ ...base, id: "3", email: "z@b.co", code: "Z1", createdAt: 3 });
+  assert.deepEqual((await store.listRedemptions("a@b.co")).map((r) => r.code), ["X2", "X1"]);
+  await store.addPoints("a@b.co", "checkin", "2026-11-27", 1, 1);
+
+  await store.deleteMemberData("a@b.co");
+  assert.deepEqual(await store.listRedemptions("a@b.co"), []);
+  assert.equal(await store.pointsBalance("a@b.co"), 0);
+  assert.deepEqual(await store.listCheckinDays("a@b.co", 400), []);
+  assert.deepEqual((await store.listRedemptions("z@b.co")).map((r) => r.code), ["Z1"]);
+});

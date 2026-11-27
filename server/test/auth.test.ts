@@ -6,6 +6,7 @@ import { CODE_TTL_MS, MAX_ATTEMPTS } from "../src/codes.ts";
 import type { Config } from "../src/config.ts";
 import { MemoryStore } from "../src/store.ts";
 import type { PushMessage } from "../src/push.ts";
+import type { RewardIssuer } from "../src/rewards.ts";
 import type { MealEstimator } from "../src/vision.ts";
 
 const config: Config = {
@@ -33,9 +34,18 @@ const config: Config = {
   trustedProxyHops: 1,
   codeDailyLimit: 4,
   expoAccessToken: "",
+  points: {
+    perCheckin: 1,
+    streakBonus: { 3: 2 },
+    rewards: [
+      { id: "five_off", title: "$5 OFF", blurb: "", cost: 3 },
+      { id: "free_tin", title: "FREE TIN", blurb: "", cost: 5 },
+    ],
+  },
+  shopify: { storeDomain: "", adminToken: "", apiVersion: "x", siteUrl: "https://rivoxlabs.com", tinProductIds: [], redirectPath: "/" },
 };
 
-function setup(subsByEmail: Record<string, Subscription[]> = {}, meals?: MealEstimator) {
+function setup(subsByEmail: Record<string, Subscription[]> = {}, meals?: MealEstimator, rewards?: RewardIssuer) {
   const sent: { to: string; code: string }[] = [];
   const pushed: { tokens: string[]; message: PushMessage }[] = [];
   const clock = { t: 1_800_000_000_000 };
@@ -44,6 +54,7 @@ function setup(subsByEmail: Record<string, Subscription[]> = {}, meals?: MealEst
     config,
     store: new MemoryStore(),
     meals,
+    rewards,
     push: {
       send: async (tokens, message) => {
         pushed.push({ tokens, message });
@@ -603,4 +614,176 @@ test("deleting an account removes its phones", async () => {
   await app.request("/me", { method: "DELETE", headers: a });
   const res = await post("/admin/push", { title: "t", body: "b", audience: "all", preview: true }, ADMIN);
   assert.deepEqual(await res.json(), { phones: 0 });
+});
+
+// ---- Points and rewards ----
+
+const dayAt = (t: number) => new Date(t).toISOString().slice(0, 10);
+const DAY_MS = 24 * 3_600_000;
+
+function rewardsRig(subs: Record<string, Subscription[]>, issuer?: RewardIssuer) {
+  const rig = setup(subs, undefined, issuer);
+  const tokens: Record<string, string> = {};
+  const auth = async (email: string) => {
+    tokens[email] ??= (await rig.signIn(email)).body.token;
+    return { Authorization: `Bearer ${tokens[email]}`, "Content-Type": "application/json" };
+  };
+  const checkin = async (email: string, done = true, day = dayAt(rig.clock.t)) => {
+    const res = await rig.app.request("/checkin", { method: "PUT", headers: await auth(email), body: JSON.stringify({ day, done }) });
+    return (await res.json()) as any;
+  };
+  const rewards = async (email: string) => (await (await rig.app.request("/rewards", { headers: await auth(email) })).json()) as any;
+  const redeem = async (email: string, rewardId: string) => {
+    const res = await rig.app.request("/rewards/redeem", { method: "POST", headers: await auth(email), body: JSON.stringify({ rewardId }) });
+    return { status: res.status, body: (await res.json()) as any };
+  };
+  return { ...rig, auth, checkin, rewards, redeem };
+}
+
+const goodIssuer = (issued: string[]): RewardIssuer => ({
+  issue: async (rewardId, email) => {
+    issued.push(`${rewardId}:${email}`);
+    return { code: `CODE${issued.length}`, url: `https://rivoxlabs.com/discount/CODE${issued.length}` };
+  },
+});
+
+test("a check-in is worth a point once a day, and a streak pays its bonus once", async () => {
+  const r = rewardsRig({ "a@example.com": [active("111")] });
+  assert.deepEqual(await r.checkin("a@example.com"), { count: 1, points: 1, earned: 1 });
+  assert.deepEqual(await r.checkin("a@example.com"), { count: 1, points: 1, earned: 0 }); // tapping again earns nothing
+  r.clock.t += DAY_MS;
+  assert.equal((await r.checkin("a@example.com")).points, 2);
+  r.clock.t += DAY_MS;
+  assert.deepEqual(await r.checkin("a@example.com"), { count: 1, points: 5, earned: 3 }); // day 3: 1 point + 2 bonus
+  r.clock.t += DAY_MS;
+  assert.deepEqual(await r.checkin("a@example.com"), { count: 1, points: 6, earned: 1 }); // bonus isn't paid again
+  // Break the streak, rebuild it: still no second bonus.
+  r.clock.t += 3 * DAY_MS;
+  for (let i = 0; i < 3; i++) {
+    await r.checkin("a@example.com");
+    r.clock.t += DAY_MS;
+  }
+  assert.equal((await r.rewards("a@example.com")).points, 9);
+});
+
+test("undoing a check-in takes the point back", async () => {
+  const r = rewardsRig({ "a@example.com": [active("111")] });
+  await r.checkin("a@example.com");
+  assert.equal((await r.checkin("a@example.com", false)).points, 0);
+  assert.equal((await r.checkin("a@example.com", false)).points, 0); // can't go negative by undoing twice
+  assert.equal((await r.checkin("a@example.com")).points, 1);
+});
+
+test("points can't be farmed by sending far-off dates", async () => {
+  const r = rewardsRig({ "a@example.com": [active("111")] });
+  const headers = await r.auth("a@example.com");
+  for (const offset of [-30, -10, -3, 3, 10, 30]) {
+    const res = await r.app.request("/checkin", {
+      method: "PUT",
+      headers,
+      body: JSON.stringify({ day: dayAt(r.clock.t + offset * DAY_MS), done: true }),
+    });
+    assert.equal(res.status, 400, `offset ${offset}`);
+  }
+  assert.equal((await r.rewards("a@example.com")).points, 0);
+});
+
+test("redeeming spends the points and hands back a code", async () => {
+  const issued: string[] = [];
+  const r = rewardsRig({ "a@example.com": [active("111")] }, goodIssuer(issued));
+  for (let i = 0; i < 4; i++) {
+    await r.checkin("a@example.com");
+    r.clock.t += DAY_MS;
+  }
+  const before = await r.rewards("a@example.com"); // 4 check-ins + 2 streak bonus
+  assert.equal(before.points, 6);
+  assert.equal(before.open, true);
+  assert.deepEqual(before.rewards.map((x: any) => [x.id, x.cost]), [["five_off", 3], ["free_tin", 5]]);
+
+  const tin = await r.redeem("a@example.com", "free_tin");
+  assert.equal(tin.status, 200);
+  assert.equal(tin.body.points, 1);
+  assert.equal(tin.body.claimed.code, "CODE1");
+  assert.equal(tin.body.claimed.title, "FREE TIN");
+  assert.equal("email" in tin.body.claimed, false);
+
+  const short = await r.redeem("a@example.com", "five_off");
+  assert.equal(short.status, 409);
+  assert.equal(short.body.error, "not_enough_points");
+  assert.deepEqual(issued, ["free_tin:a@example.com"]); // nothing was made for the failed one
+
+  const after = await r.rewards("a@example.com");
+  assert.equal(after.points, 1);
+  assert.deepEqual(after.claimed.map((x: any) => x.code), ["CODE1"]);
+  assert.equal((await r.redeem("a@example.com", "a_car")).status, 400);
+});
+
+test("if the code can't be made, the points come back", async () => {
+  const r = rewardsRig({ "a@example.com": [active("111")] }, { issue: async () => Promise.reject(new Error("shopify down")) });
+  for (let i = 0; i < 3; i++) {
+    await r.checkin("a@example.com");
+    r.clock.t += DAY_MS;
+  }
+  const res = await r.redeem("a@example.com", "five_off");
+  assert.equal(res.status, 502);
+  assert.equal(res.body.error, "reward_failed");
+  const after = await r.rewards("a@example.com");
+  assert.equal(after.points, 5);
+  assert.deepEqual(after.claimed, []);
+});
+
+test("two taps at once can't spend the same points twice", async () => {
+  const issued: string[] = [];
+  const r = rewardsRig({ "a@example.com": [active("111")] }, goodIssuer(issued));
+  for (let i = 0; i < 3; i++) {
+    await r.checkin("a@example.com");
+    r.clock.t += DAY_MS;
+  }
+  // 5 points. Two $5-off claims at 3 points each: only one can go through.
+  const [x, y] = await Promise.all([r.redeem("a@example.com", "five_off"), r.redeem("a@example.com", "five_off")]);
+  assert.deepEqual([x.status, y.status].sort(), [200, 409]);
+  assert.equal(issued.length, 1);
+  assert.equal((await r.rewards("a@example.com")).points, 2);
+});
+
+test("you have to still be subscribed to redeem, and points wait until the key is set", async () => {
+  const issued: string[] = [];
+  const r = rewardsRig({ "a@example.com": [active("111")] }, goodIssuer(issued));
+  for (let i = 0; i < 3; i++) {
+    await r.checkin("a@example.com");
+    r.clock.t += DAY_MS;
+  }
+  r.loopState.subs["a@example.com"] = []; // cancelled
+  assert.equal((await r.redeem("a@example.com", "five_off")).status, 403);
+  assert.equal((await r.rewards("a@example.com")).points, 5); // points are kept, not spent
+  assert.equal(issued.length, 0);
+
+  const off = rewardsRig({ "b@example.com": [active("111")] });
+  for (let i = 0; i < 3; i++) {
+    await off.checkin("b@example.com");
+    off.clock.t += DAY_MS;
+  }
+  const res = await off.redeem("b@example.com", "five_off");
+  assert.equal(res.status, 503);
+  assert.equal(res.body.error, "rewards_unavailable");
+  const view = await off.rewards("b@example.com");
+  assert.equal(view.open, false);
+  assert.equal(view.points, 5);
+  assert.equal((await off.app.request("/rewards")).status, 401);
+});
+
+test("deleting the account wipes points and claimed rewards", async () => {
+  const r = rewardsRig({ "a@example.com": [active("111")] }, goodIssuer([]));
+  for (let i = 0; i < 4; i++) {
+    await r.checkin("a@example.com");
+    r.clock.t += DAY_MS;
+  }
+  await r.redeem("a@example.com", "five_off");
+  const before = await r.rewards("a@example.com");
+  assert.equal(before.points, 3);
+  assert.equal(before.claimed.length, 1);
+  await r.app.request("/me", { method: "DELETE", headers: await r.auth("a@example.com") });
+  const after = await r.rewards("a@example.com");
+  assert.equal(after.points, 0);
+  assert.deepEqual(after.claimed, []);
 });

@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import { Hono } from "hono";
 import { timingSafeEqual } from "node:crypto";
 import { decideAccess, type Access } from "./access.ts";
@@ -16,7 +17,9 @@ import type { EmailSender } from "./email.ts";
 import type { LoopClient } from "./loop.ts";
 import { createSession, readSession } from "./session.ts";
 import { WindowLimiter, clientIp, forwardedCount } from "./limits.ts";
+import { bonusesFor, streakEnding } from "./points.ts";
 import { inAudience, isPushToken, parsePush, type PushSender } from "./push.ts";
+import type { RewardIssuer } from "./rewards.ts";
 import type { Store } from "./store.ts";
 import { MAX_IMAGE_BASE64, MEDIA_TYPES, type MealEstimator } from "./vision.ts";
 
@@ -31,6 +34,8 @@ export interface Deps {
   /** Missing when the meal photo feature is switched off. */
   meals?: MealEstimator;
   push: PushSender;
+  /** Missing when reward codes can't be issued yet (no Shopify key). Points still add up. */
+  rewards?: RewardIssuer;
   now?: () => number;
 }
 
@@ -144,6 +149,7 @@ export function createApp(deps: Deps) {
     }
   });
 
+  const rules = config.points;
   const SYNC_PARTS = ["days", "train"];
   const MAX_SYNC_BYTES = 300_000;
   const sessionEmail = (c: { req: { header(name: string): string | undefined } }) => {
@@ -198,7 +204,66 @@ export function createApp(deps: Deps) {
     const body = (await c.req.json().catch(() => null)) as { day?: unknown; done?: unknown } | null;
     if (!dayAllowed(body?.day) || typeof body?.done !== "boolean") return c.json({ error: "invalid_request" }, 400);
     await store.setCheckin(address, body.day, body.done);
-    return c.json({ count: await store.countCheckins(body.day) });
+
+    // Points are awarded here, by the server, so the phone can't invent them.
+    let earned = 0;
+    if (body.done) {
+      if (await store.addPoints(address, "checkin", body.day, rules.perCheckin, now())) earned += rules.perCheckin;
+      const streak = streakEnding(await store.listCheckinDays(address, 400), body.day);
+      for (const [length, bonus] of bonusesFor(streak, rules)) {
+        if (await store.addPoints(address, "streak", String(length), bonus, now())) earned += bonus;
+      }
+    } else if ((await store.pointsBalance(address)) >= rules.perCheckin) {
+      // Undoing a check-in gives the point back, unless it's already been spent.
+      await store.removePoints(address, "checkin", body.day);
+    }
+    return c.json({ count: await store.countCheckins(body.day), points: await store.pointsBalance(address), earned });
+  });
+
+  // What the member has, what it buys, and what they've already claimed.
+  app.get("/rewards", async (c) => {
+    const address = sessionEmail(c);
+    if (!address) return c.json({ error: "unauthorized" }, 401);
+    return c.json({
+      points: Math.max(0, await store.pointsBalance(address)),
+      rewards: rules.rewards,
+      open: Boolean(deps.rewards),
+      claimed: (await store.listRedemptions(address)).map(({ email: _email, ...rest }) => rest),
+    });
+  });
+
+  // Spend points on a reward. The points come off first, and go back if the code can't be made.
+  app.post("/rewards/redeem", async (c) => {
+    const address = sessionEmail(c);
+    if (!address) return c.json({ error: "unauthorized" }, 401);
+    const body = (await c.req.json().catch(() => null)) as { rewardId?: unknown } | null;
+    const reward = rules.rewards.find((r) => r.id === body?.rewardId);
+    if (!reward) return c.json({ error: "invalid_request" }, 400);
+    if (!deps.rewards) return c.json({ error: "rewards_unavailable" }, 503);
+
+    // Rewards are for people still subscribed, checked fresh rather than trusting what we last knew.
+    let access;
+    try {
+      access = await refreshAccess(address);
+    } catch (err) {
+      console.error("Loop lookup failed during redeem:", err);
+      return c.json({ error: "subscription_check_unavailable" }, 503);
+    }
+    if (!access.allowed) return c.json({ error: "members_only" }, 403);
+
+    const id = randomUUID();
+    if (!(await store.spendPoints(address, reward.cost, id, now()))) return c.json({ error: "not_enough_points" }, 409);
+    try {
+      const issued = await deps.rewards.issue(reward.id, address);
+      const redemption = { id, email: address, rewardId: reward.id, title: reward.title, cost: reward.cost, ...issued, createdAt: now() };
+      await store.putRedemption(redemption);
+      const { email: _email, ...claimed } = redemption;
+      return c.json({ claimed, points: Math.max(0, await store.pointsBalance(address)) });
+    } catch (err) {
+      await store.removePoints(address, "redeem", id); // hand the points back
+      console.error("Issuing a reward failed:", err);
+      return c.json({ error: "reward_failed" }, 502);
+    }
   });
 
   // A phone signing up for alerts. The member chose this in the app: nothing is registered without a tap.

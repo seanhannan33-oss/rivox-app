@@ -3,11 +3,16 @@ import pg from "pg";
 import type { Access } from "./access.ts";
 import type { StoredCode } from "./codes.ts";
 import type { Drop } from "./drops.ts";
-import type { Member, Store } from "./store.ts";
+import type { Member, Redemption, Store } from "./store.ts";
 
 /** The slice of pg.Pool this store uses, so tests can pass a real pool or a stand-in. */
 export interface Queryable {
   query(text: string, values?: unknown[]): Promise<{ rows: Record<string, unknown>[] }>;
+}
+
+/** A pool can hand out one connection for a transaction. */
+interface Pool extends Queryable {
+  connect(): Promise<Queryable & { release(): void }>;
 }
 
 export function createPool(connectionString: string): pg.Pool {
@@ -15,7 +20,7 @@ export function createPool(connectionString: string): pg.Pool {
 }
 
 export class PostgresStore implements Store {
-  constructor(private readonly db: Queryable) {}
+  constructor(private readonly db: Pool) {}
 
   /** Safe to run on every start. */
   async migrate(): Promise<void> {
@@ -62,6 +67,23 @@ export class PostgresStore implements Store {
         PRIMARY KEY (email, day)
       )`);
     await this.db.query("CREATE INDEX IF NOT EXISTS checkins_day ON checkins (day)");
+    await this.db.query(`
+      CREATE TABLE IF NOT EXISTS points_ledger (
+        email      text NOT NULL,
+        kind       text NOT NULL,
+        ref        text NOT NULL,
+        points     integer NOT NULL,
+        created_at bigint NOT NULL,
+        PRIMARY KEY (email, kind, ref)
+      )`);
+    await this.db.query(`
+      CREATE TABLE IF NOT EXISTS redemptions (
+        id         text PRIMARY KEY,
+        email      text NOT NULL,
+        data       jsonb NOT NULL,
+        created_at bigint NOT NULL
+      )`);
+    await this.db.query("CREATE INDEX IF NOT EXISTS redemptions_email ON redemptions (email)");
     await this.db.query(`
       CREATE TABLE IF NOT EXISTS push_tokens (
         token      text PRIMARY KEY,
@@ -174,6 +196,68 @@ export class PostgresStore implements Store {
     return Number(rows[0]?.n ?? 0);
   }
 
+  async addPoints(email: string, kind: string, ref: string, points: number, now: number): Promise<boolean> {
+    const { rows } = await this.db.query(
+      `INSERT INTO points_ledger (email, kind, ref, points, created_at) VALUES ($1, $2, $3, $4, $5)
+       ON CONFLICT DO NOTHING RETURNING ref`,
+      [email, kind, ref, points, now],
+    );
+    return rows.length > 0;
+  }
+
+  async removePoints(email: string, kind: string, ref: string): Promise<void> {
+    await this.db.query("DELETE FROM points_ledger WHERE email = $1 AND kind = $2 AND ref = $3", [email, kind, ref]);
+  }
+
+  async pointsBalance(email: string): Promise<number> {
+    const { rows } = await this.db.query("SELECT COALESCE(SUM(points), 0)::int AS n FROM points_ledger WHERE email = $1", [email]);
+    return Number(rows[0]?.n ?? 0);
+  }
+
+  async spendPoints(email: string, cost: number, ref: string, now: number): Promise<boolean> {
+    // One connection, one transaction, one lock per member: a second tap waits, then sees the lower balance.
+    const client = await this.db.connect();
+    try {
+      await client.query("BEGIN");
+      await client.query("SELECT pg_advisory_xact_lock(hashtext($1))", [`points:${email}`]);
+      const { rows } = await client.query("SELECT COALESCE(SUM(points), 0)::int AS n FROM points_ledger WHERE email = $1", [email]);
+      if (Number(rows[0]?.n ?? 0) < cost) {
+        await client.query("ROLLBACK");
+        return false;
+      }
+      await client.query(
+        "INSERT INTO points_ledger (email, kind, ref, points, created_at) VALUES ($1, 'redeem', $2, $3, $4)",
+        [email, ref, -cost, now],
+      );
+      await client.query("COMMIT");
+      return true;
+    } catch (err) {
+      await client.query("ROLLBACK").catch(() => {});
+      throw err;
+    } finally {
+      client.release();
+    }
+  }
+
+  async listCheckinDays(email: string, limit: number): Promise<string[]> {
+    const { rows } = await this.db.query("SELECT day FROM checkins WHERE email = $1 ORDER BY day DESC LIMIT $2", [email, limit]);
+    return rows.map((r) => String(r.day));
+  }
+
+  async putRedemption(r: Redemption): Promise<void> {
+    await this.db.query("INSERT INTO redemptions (id, email, data, created_at) VALUES ($1, $2, $3::jsonb, $4)", [
+      r.id,
+      r.email,
+      JSON.stringify(r),
+      r.createdAt,
+    ]);
+  }
+
+  async listRedemptions(email: string): Promise<Redemption[]> {
+    const { rows } = await this.db.query("SELECT data FROM redemptions WHERE email = $1 ORDER BY created_at DESC", [email]);
+    return rows.map((r) => r.data as Redemption);
+  }
+
   async putPushToken(email: string, token: string, platform: string, now: number): Promise<void> {
     await this.db.query(
       `INSERT INTO push_tokens (token, email, platform, updated_at) VALUES ($1, $2, $3, $4)
@@ -192,7 +276,7 @@ export class PostgresStore implements Store {
   }
 
   async deleteMemberData(email: string): Promise<void> {
-    for (const table of ["sign_in_codes", "members", "usage_counts", "sync_docs", "checkins", "push_tokens"]) {
+    for (const table of ["sign_in_codes", "members", "usage_counts", "sync_docs", "checkins", "push_tokens", "points_ledger", "redemptions"]) {
       await this.db.query(`DELETE FROM ${table} WHERE email = $1`, [email]);
     }
   }

@@ -1,3 +1,5 @@
+import { rulesFromEnv, type PointsRules } from "./points.ts";
+import type { ShopifyConfig } from "./rewards.ts";
 export interface Config {
   port: number;
   sessionSecret: string;
@@ -30,6 +32,9 @@ export interface Config {
   codeDailyLimit: number;
   /** Optional token for Expo's push service. Only needed with enhanced security on. */
   expoAccessToken: string;
+  points: PointsRules;
+  /** Needed to hand out reward codes. adminToken empty means redeeming is switched off. */
+  shopify: ShopifyConfig;
 }
 
 function list(value: string | undefined): string[] {
@@ -75,5 +80,14 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
     trustedProxyHops: Math.max(1, Number(env.TRUSTED_PROXY_HOPS ?? 1) || 1),
     codeDailyLimit: Math.max(1, Number(env.CODE_DAILY_LIMIT ?? 10) || 10),
     expoAccessToken: (env.EXPO_ACCESS_TOKEN ?? "").trim(),
+    points: rulesFromEnv(env),
+    shopify: {
+      storeDomain: (env.SHOPIFY_STORE_DOMAIN ?? "").trim().replace(/^https?:\/\//, "").replace(/\/+$/, ""),
+      adminToken: (env.SHOPIFY_ADMIN_TOKEN ?? "").trim(),
+      apiVersion: (env.SHOPIFY_API_VERSION ?? "2026-10").trim(),
+      siteUrl: (env.SITE_URL ?? "https://rivoxlabs.com").trim(),
+      tinProductIds: list(env.REWARD_TIN_PRODUCT_IDS ?? ""),
+      redirectPath: (env.REWARD_TIN_PATH ?? "/collections/all").trim(),
+    },
   };
 }
