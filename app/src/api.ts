@@ -117,6 +117,22 @@ export function putCheckin(token: string, day: string, done: boolean): Promise<{
   });
 }
 
+export function registerPush(token: string, pushToken: string, platform: "ios" | "android"): Promise<{ ok: true }> {
+  return call("/push/register", {
+    method: "POST",
+    headers: { authorization: `Bearer ${token}` },
+    body: JSON.stringify({ token: pushToken, platform }),
+  });
+}
+
+export function unregisterPush(token: string, pushToken: string): Promise<{ ok: true }> {
+  return call("/push/unregister", {
+    method: "POST",
+    headers: { authorization: `Bearer ${token}` },
+    body: JSON.stringify({ token: pushToken }),
+  });
+}
+
 /** Deletes everything the server holds for this account. Their subscription is not affected. */
 export function deleteAccount(token: string): Promise<{ ok: true }> {
   return call("/me", { method: "DELETE", headers: { authorization: `Bearer ${token}` } });

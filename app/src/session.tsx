@@ -2,6 +2,7 @@ import * as SecureStore from "expo-secure-store";
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { ApiError, deleteAccount as deleteOnServer, fetchMe, type Access } from "./api";
+import { forgetPush } from "./lib/push";
 
 const KEY = "rivox.session.v1";
 
@@ -85,13 +86,15 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const signOut = useCallback(async () => {
+    await forgetPush(stored?.token ?? null); // this phone stops getting alerts for the account
     await save(null);
     setStored(null);
-  }, []);
+  }, [stored]);
 
   const deleteAccount = useCallback(async () => {
     if (!stored) return;
     await deleteOnServer(stored.token); // if this fails we stop here, so nothing is half-deleted
+    await forgetPush(null); // the server already dropped this phone with the account
     const keys = ["days", "train", "fuel"].map((part) => `rivox.${part}.v1.${stored.email}`);
     await AsyncStorage.multiRemove(keys).catch(() => {});
     await save(null);

@@ -1,11 +1,12 @@
 import * as Linking from "expo-linking";
 import { useFocusEffect } from "expo-router";
-import { useCallback, useState } from "react";
-import { Image, ImageBackground, RefreshControl, ScrollView, StyleSheet, Text, View } from "react-native";
+import { useCallback, useEffect, useState } from "react";
+import { Image, ImageBackground, Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { ApiError, errorMessage, fetchDrops, type Drop } from "../../api";
 import { Body, Button, Headline, Label } from "../../components/ui";
 import { endsLabel, tagLink } from "../../lib/days";
+import { disablePush, enablePush, pushAvailable, pushState, type PushState } from "../../lib/push";
 import { useSession } from "../../session";
 import { colors, fonts, radius } from "../../theme";
 
@@ -83,6 +84,8 @@ export default function Drops() {
             <Headline style={s.h1}>MEMBERS</Headline>
             <Headline style={s.yellow}>GO FIRST.</Headline>
 
+            <Alerts token={token} />
+
             {error ? (
               <View style={s.state}>
                 <Body>{error}</Body>
@@ -103,6 +106,68 @@ export default function Drops() {
           </View>
         </ScrollView>
       </SafeAreaView>
+    </View>
+  );
+}
+
+/** The opt-in for drop alerts. Hidden entirely until this build can actually receive them. */
+function Alerts({ token }: { token: string | null }) {
+  const [state, setState] = useState<PushState | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [failed, setFailed] = useState(false);
+
+  useEffect(() => {
+    if (!pushAvailable()) return;
+    let alive = true;
+    pushState()
+      .then((st) => {
+        if (alive) setState(st);
+      })
+      .catch(() => {});
+    return () => {
+      alive = false;
+    };
+  }, []);
+
+  if (!pushAvailable() || state === null || !token) return null;
+
+  async function flip() {
+    if (!token) return;
+    setBusy(true);
+    setFailed(false);
+    try {
+      setState(state === "on" ? await disablePush(token) : await enablePush(token));
+    } catch {
+      setFailed(true);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  if (state === "on") {
+    return (
+      <View style={s.alerts}>
+        <Text style={s.alertsOn}>ALERTS ON. YOU HEAR FIRST.</Text>
+        <Pressable onPress={flip} disabled={busy} accessibilityRole="button" hitSlop={8}>
+          <Text style={s.alertsLink}>Turn off</Text>
+        </Pressable>
+      </View>
+    );
+  }
+  return (
+    <View style={s.alertsCard}>
+      <Text style={s.alertsTitle}>HEAR IT FIRST.</Text>
+      <Body style={s.alertsBody}>
+        {state === "blocked"
+          ? "Alerts are blocked for Rivox. Switch them on in your phone's Settings."
+          : "Deals and new flavors, the minute they land. Nothing else. We're not that needy."}
+      </Body>
+      {state === "blocked" ? (
+        <Button title="OPEN SETTINGS" variant="outline" onPress={() => void Linking.openSettings()} />
+      ) : (
+        <Button title="TURN ON ALERTS" variant="outline" busy={busy} onPress={flip} />
+      )}
+      {failed ? <Text style={s.alertsFail}>Couldn't switch that on. Try again.</Text> : null}
     </View>
   );
 }
@@ -146,6 +211,20 @@ const s = StyleSheet.create({
   body: { paddingHorizontal: 24, paddingTop: 24 },
   h1: { marginTop: 6 },
   yellow: { color: colors.yellow },
+  alerts: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginTop: 20 },
+  alertsOn: { fontFamily: fonts.bold, color: colors.yellow, fontSize: 12, letterSpacing: 1 },
+  alertsLink: { fontFamily: fonts.bold, color: colors.muted, fontSize: 13, textDecorationLine: "underline" },
+  alertsCard: {
+    backgroundColor: colors.panel,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: radius.md,
+    padding: 18,
+    marginTop: 20,
+  },
+  alertsTitle: { fontFamily: fonts.headline, color: colors.text, fontSize: 22 },
+  alertsBody: { marginTop: 4, marginBottom: 14 },
+  alertsFail: { fontFamily: fonts.medium, color: colors.pink, fontSize: 13, marginTop: 10 },
   state: { marginTop: 28 },
   retry: { marginTop: 16 },
   emptyTitle: { fontFamily: fonts.headline, color: colors.text, fontSize: 22, marginBottom: 6 },

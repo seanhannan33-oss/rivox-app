@@ -1,8 +1,29 @@
+import { useRouter } from "expo-router";
 import { Tabs } from "expo-router/js-tabs";
+import { useEffect } from "react";
+import { listenForPushes, pushAvailable } from "../../lib/push";
 import { DayLogProvider } from "../../lib/useDayLog";
 import { colors, fonts } from "../../theme";
 
 export default function TabsLayout() {
+  const router = useRouter();
+  // Tapping an alert opens the tab it was about.
+  useEffect(() => {
+    if (!pushAvailable()) return;
+    let stop: (() => void) | undefined;
+    let alive = true;
+    listenForPushes((tab) => router.navigate(tab === "today" ? "/" : "/drops"))
+      .then((cleanup) => {
+        if (alive) stop = cleanup;
+        else cleanup();
+      })
+      .catch(() => {});
+    return () => {
+      alive = false;
+      stop?.();
+    };
+  }, [router]);
+
   return (
     <DayLogProvider>
     <Tabs

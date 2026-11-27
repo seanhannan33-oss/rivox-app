@@ -42,7 +42,8 @@
           "photosPermission": "Rivox lets you pick a meal photo to get a protein estimate.",
           "microphonePermission": false
         }
-      ]
+      ],
+      "expo-notifications"
     ],
     "experiments": {
       "typedRoutes": true

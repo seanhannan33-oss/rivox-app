@@ -75,3 +75,10 @@ Checks: `npm run typecheck`. Not yet run on a real phone.
 
 - Check-ins and the training log are kept on the phone and mirrored to the server (`/sync/days`, `/sync/train`). The newer change wins. Body weight and the food log are never sent.
 - `DELETE /me` removes everything held for that email: member record, sign-in codes, synced data and usage counts. It does not touch the Loop subscription.
+
+## Limits, check-ins, badges and push
+
+- Sign-in is rate limited per caller address, per email per day and overall. `TRUSTED_PROXY_HOPS` must match the host (the admin page shows the address the server sees).
+- `PUT /checkin` keeps one yes or no per member per day and returns the day's total. The app shows it only when at least five others have checked in.
+- Badges at 7, 14, 30, 60, 90, 180 and 365 days are worked out on the phone from the longest streak.
+- Push: the app registers a token only after the member taps "Turn on alerts", and only in a real build with an Expo project id (run `eas init`). The admin page sends pushes through Expo's push service. `EXPO_ACCESS_TOKEN` is optional.
