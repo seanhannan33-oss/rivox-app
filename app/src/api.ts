@@ -137,6 +137,37 @@ export function unregisterPush(token: string, pushToken: string): Promise<{ ok: 
   });
 }
 
+export interface ShopVariant {
+  id: string;
+  title: string;
+  price: string;
+  available: boolean;
+}
+export interface ShopProduct {
+  id: string;
+  title: string;
+  image: string | null;
+  url: string;
+  variants: ShopVariant[];
+}
+export interface ShopOrder {
+  name: string;
+  placedAt: number;
+  status: "cancelled" | "delivered" | "shipped" | "preparing";
+  total: string;
+  items: { title: string; quantity: number }[];
+  tracking: { url: string; number: string; company: string } | null;
+  statusUrl: string | null;
+}
+
+export function fetchProducts(token: string): Promise<{ products: ShopProduct[]; site: string }> {
+  return call("/shop/products", { headers: { authorization: `Bearer ${token}` } });
+}
+
+export function fetchOrders(token: string): Promise<{ orders: ShopOrder[] }> {
+  return call("/shop/orders", { headers: { authorization: `Bearer ${token}` } });
+}
+
 export interface Reward {
   id: string;
   title: string;
@@ -205,6 +236,10 @@ export function errorMessage(err: unknown): string {
       return "That photo didn't go through. Try another.";
     case "photo_failed":
       return "Couldn't read that plate. Try again, or tap a number.";
+    case "shop_unavailable":
+      return "The shop isn't open in the app yet.";
+    case "shop_failed":
+      return "Couldn't reach the store. Try again.";
     case "not_enough_points":
       return "Not enough points yet. Keep showing up.";
     case "rewards_unavailable":

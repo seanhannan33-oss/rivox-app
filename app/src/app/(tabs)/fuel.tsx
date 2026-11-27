@@ -16,12 +16,14 @@ import {
 import { getMealPhoto } from "../../lib/photo";
 import { useDayLog } from "../../lib/useDayLog";
 import { useFuel } from "../../lib/useFuel";
+import { useRankLabel } from "../../components/Ranks";
 import { useSession } from "../../session";
 import { fonts, onPhoto, radius, themed, useColors } from "../../theme";
 
 const QUICK = [10, 20, 30, 40];
 
 export default function Fuel() {
+  const rankLabel = useRankLabel();
   const s = useS();
   const { email, token, access, signOut } = useSession();
   const { today, entry: dayEntry } = useDayLog();
@@ -76,7 +78,7 @@ export default function Fuel() {
           accessibilityLabel="Rivox Labs"
         />
         <View style={s.pill}>
-          <Text style={s.pillText}>RIVOX MEMBER</Text>
+          <Text style={s.pillText}>{rankLabel}</Text>
         </View>
       </ImageBackground>
 

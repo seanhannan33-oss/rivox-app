@@ -89,3 +89,9 @@ Checks: `npm run typecheck`. Not yet run on a real phone.
 - Rewards: `$5 off` at 60 points and a free tin at 90 (`FIVE_OFF_COST`, `FREE_TIN_COST`).
 - Redeeming re-checks the subscription with Loop, takes the points under a per-member lock, then creates a single-use Shopify discount code tied to the member. If the code can't be made the points are returned.
 - Redeeming is off until `SHOPIFY_STORE_DOMAIN` and `SHOPIFY_ADMIN_TOKEN` are set. The token needs write_discounts, read_customers and read_products. Set `REWARD_TIN_PRODUCT_IDS` to the tin products.
+
+## Ranks, streak saves and the shop
+
+- Ranks: PUP, PACK, HUNTER, ALPHA, NO CURFEW at 7, 30, 60, 90 and 365 days, earned on the longest streak. Emblem images are in `app/assets/ranks`.
+- Streak saves: one earned per 14 check-ins, two held at most. The same rule runs on the phone (`app/src/lib/days.ts`) and the server (`server/src/points.ts`).
+- Shop: `GET /shop/products` and `GET /shop/orders` read from Shopify with the same key as rewards (the token also needs read_orders). The cart is on the phone and checkout opens a Shopify cart link in the in-app browser. `SHOP_HIDE_PRODUCT_IDS` hides products.

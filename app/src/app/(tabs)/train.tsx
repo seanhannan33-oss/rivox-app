@@ -23,6 +23,7 @@ import {
 } from "../../lib/train";
 import { useDayLog } from "../../lib/useDayLog";
 import { useTrainLog } from "../../lib/useTrainLog";
+import { useRankLabel } from "../../components/Ranks";
 import { useSession } from "../../session";
 import { fonts, onPhoto, radius, themed } from "../../theme";
 
@@ -34,6 +35,7 @@ const STATE_TEXT: Record<DayState, string> = {
 };
 
 export default function Train() {
+  const rankLabel = useRankLabel();
   const s = useS();
   const { access } = useSession();
   const { today, firstDay } = useDayLog();
@@ -90,7 +92,7 @@ export default function Train() {
           accessibilityLabel="Rivox Labs"
         />
         <View style={s.pill}>
-          <Text style={s.pillText}>RIVOX MEMBER</Text>
+          <Text style={s.pillText}>{rankLabel}</Text>
         </View>
       </ImageBackground>
 

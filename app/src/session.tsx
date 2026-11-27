@@ -95,7 +95,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     if (!stored) return;
     await deleteOnServer(stored.token); // if this fails we stop here, so nothing is half-deleted
     await forgetPush(null); // the server already dropped this phone with the account
-    const keys = ["days", "train", "fuel"].map((part) => `rivox.${part}.v1.${stored.email}`);
+    const keys = ["days", "train", "fuel", "cart", "favs", "rank.seen"].map((part) => `rivox.${part}.v1.${stored.email}`);
     await AsyncStorage.multiRemove(keys).catch(() => {});
     await save(null);
     setStored(null);

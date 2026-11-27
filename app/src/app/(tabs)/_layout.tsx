@@ -13,7 +13,7 @@ export default function TabsLayout() {
     if (!pushAvailable()) return;
     let stop: (() => void) | undefined;
     let alive = true;
-    listenForPushes((tab) => router.navigate(tab === "today" ? "/" : "/drops"))
+    listenForPushes((tab) => router.navigate(tab === "today" ? "/" : "/shop"))
       .then((cleanup) => {
         if (alive) stop = cleanup;
         else cleanup();
@@ -42,7 +42,7 @@ export default function TabsLayout() {
       <Tabs.Screen name="index" options={{ title: "TODAY" }} />
       <Tabs.Screen name="train" options={{ title: "TRAIN" }} />
       <Tabs.Screen name="fuel" options={{ title: "FUEL" }} />
-      <Tabs.Screen name="drops" options={{ title: "DROPS" }} />
+      <Tabs.Screen name="shop" options={{ title: "SHOP" }} />
     </Tabs>
     </DayLogProvider>
   );

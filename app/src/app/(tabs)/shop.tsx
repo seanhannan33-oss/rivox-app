@@ -1,19 +1,25 @@
 import * as Linking from "expo-linking";
 import { useFocusEffect } from "expo-router";
 import { useCallback, useEffect, useState } from "react";
-import { Image, ImageBackground, Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from "react-native";
+import { Alert, Image, ImageBackground, Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { ApiError, errorMessage, fetchDrops, type Drop } from "../../api";
+import { useRankLabel } from "../../components/Ranks";
+import { CartBar, Shelf } from "../../components/Shelf";
 import { Body, Button, Headline, Label } from "../../components/ui";
 import { endsLabel, tagLink } from "../../lib/days";
 import { disablePush, enablePush, pushAvailable, pushState, type PushState } from "../../lib/push";
+import { useCart } from "../../lib/useCart";
 import { useSession } from "../../session";
 import { fonts, onPhoto, radius, themed, useColors } from "../../theme";
 
-export default function Drops() {
+export default function Shop() {
   const s = useS();
   const colors = useColors();
-  const { token, signOut } = useSession();
+  const { token, email, signOut } = useSession();
+  const shop = useCart(email);
+  const rankLabel = useRankLabel();
+  const [reloadKey, setReloadKey] = useState(0);
   const [drops, setDrops] = useState<Drop[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
@@ -58,6 +64,7 @@ export default function Drops() {
               tintColor={colors.accent}
               onRefresh={async () => {
                 setRefreshing(true);
+                setReloadKey((k) => k + 1); // the shelf reloads too
                 await load();
                 setRefreshing(false);
               }}
@@ -77,12 +84,12 @@ export default function Drops() {
               accessibilityLabel="Rivox Labs"
             />
             <View style={s.pill}>
-              <Text style={s.pillText}>RIVOX MEMBER</Text>
+              <Text style={s.pillText}>{rankLabel}</Text>
             </View>
           </ImageBackground>
 
           <View style={s.body}>
-            <Label>DROPS</Label>
+            <Label>SHOP</Label>
             <Headline style={s.h1}>MEMBERS</Headline>
             <Headline style={s.yellow}>GO FIRST.</Headline>
 
@@ -99,14 +106,25 @@ export default function Drops() {
               <Body style={s.state}>Checking what's live.</Body>
             ) : drops.length === 0 ? (
               <View style={s.state}>
-                <Text style={s.emptyTitle}>NOTHING LIVE RIGHT NOW.</Text>
-                <Body>When a deal or a new flavor lands, it lands here before anywhere else. Pull down to check.</Body>
+                <Text style={s.emptyTitle}>NO DROPS RIGHT NOW.</Text>
+                <Body>When a deal or a new flavor lands, it lands here before anywhere else.</Body>
               </View>
             ) : (
               drops.map((d) => <DropCard key={d.id} drop={d} now={now} />)
             )}
+
+            <Shelf shop={shop} reloadKey={reloadKey} />
           </View>
         </ScrollView>
+        <CartBar
+          cart={shop.cart}
+          onCheckedOut={() =>
+            Alert.alert("Order placed?", "If you finished checking out, we'll empty the cart.", [
+              { text: "Not yet", style: "cancel" },
+              { text: "Yes, empty it", onPress: shop.clear },
+            ])
+          }
+        />
       </SafeAreaView>
     </View>
   );

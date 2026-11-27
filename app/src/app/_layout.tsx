@@ -28,6 +28,7 @@ function Routes({ fontsReady }: { fontsReady: boolean }) {
     <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: colors.bg } }}>
       <Stack.Protected guard={status === "member"}>
         <Stack.Screen name="(tabs)" />
+        <Stack.Screen name="orders" />
       </Stack.Protected>
       <Stack.Protected guard={status === "locked"}>
         <Stack.Screen name="locked" />
