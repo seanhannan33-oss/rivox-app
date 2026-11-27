@@ -43,7 +43,7 @@ const config: Config = {
       { id: "free_tin", title: "FREE TIN", blurb: "", cost: 5 },
     ],
   },
-  shopify: { storeDomain: "", adminToken: "", apiVersion: "x", siteUrl: "https://rivoxlabs.com", tinProductIds: [], redirectPath: "/", hiddenProductIds: [] },
+  shopify: { storeDomain: "", adminToken: "", clientId: "", clientSecret: "", apiVersion: "x", siteUrl: "https://rivoxlabs.com", tinProductIds: [], redirectPath: "/", hiddenProductIds: [] },
 };
 
 function setup(

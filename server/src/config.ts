@@ -84,6 +84,8 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
     shopify: {
       storeDomain: (env.SHOPIFY_STORE_DOMAIN ?? "").trim().replace(/^https?:\/\//, "").replace(/\/+$/, ""),
       adminToken: (env.SHOPIFY_ADMIN_TOKEN ?? "").trim(),
+      clientId: (env.SHOPIFY_CLIENT_ID ?? "").trim(),
+      clientSecret: (env.SHOPIFY_CLIENT_SECRET ?? "").trim(),
       apiVersion: (env.SHOPIFY_API_VERSION ?? "2026-10").trim(),
       siteUrl: (env.SITE_URL ?? "https://rivoxlabs.com").trim(),
       tinProductIds: list(env.REWARD_TIN_PRODUCT_IDS ?? ""),

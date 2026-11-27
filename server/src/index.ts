@@ -7,6 +7,7 @@ import { PostgresStore, createPool } from "./pg-store.ts";
 import { ExpoPushSender } from "./push.ts";
 import { ShopifyRewardIssuer, type RewardIssuer } from "./rewards.ts";
 import { ShopifyShop, type Shop } from "./shop.ts";
+import { shopifyReady } from "./shopify.ts";
 import { MemoryStore, type Store } from "./store.ts";
 import { AnthropicMealEstimator, type MealEstimator } from "./vision.ts";
 
@@ -46,12 +47,12 @@ if (config.anthropicApiKey) {
 
 let rewards: RewardIssuer | undefined;
 let shop: Shop | undefined;
-if (config.shopify.adminToken && config.shopify.storeDomain) {
+if (shopifyReady(config.shopify)) {
   rewards = new ShopifyRewardIssuer(config.shopify);
   shop = new ShopifyShop(config.shopify);
   console.log(`Rewards and shop: on (${config.shopify.storeDomain}).`);
 } else {
-  console.warn("Rewards and shop: off. Points still add up. Set SHOPIFY_STORE_DOMAIN and SHOPIFY_ADMIN_TOKEN to switch them on.");
+  console.warn("Rewards and shop: off. Points still add up. Set SHOPIFY_STORE_DOMAIN, SHOPIFY_CLIENT_ID and SHOPIFY_CLIENT_SECRET to switch them on.");
 }
 
 const app = createApp({ config, store, loop: new HttpLoopClient(config.loop), email, meals, push: new ExpoPushSender(config.expoAccessToken), rewards, shop });

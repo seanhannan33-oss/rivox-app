@@ -74,7 +74,7 @@ test("orders: status, total, items and tracking", () => {
   assert.equal(partial!.status, "shipped");
 });
 
-const cfg = { storeDomain: "x.myshopify.com", adminToken: "t", apiVersion: "2026-10", siteUrl: "https://rivoxlabs.com", tinProductIds: [], redirectPath: "/", hiddenProductIds: [] };
+const cfg = { storeDomain: "x.myshopify.com", adminToken: "t", clientId: "", clientSecret: "", apiVersion: "2026-10", siteUrl: "https://rivoxlabs.com", tinProductIds: [], redirectPath: "/", hiddenProductIds: [] };
 
 test("ShopifyShop caches products briefly and looks orders up by the exact email", async () => {
   const calls: { query: string; variables: any }[] = [];

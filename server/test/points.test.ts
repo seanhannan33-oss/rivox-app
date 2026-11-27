@@ -86,6 +86,8 @@ test("codes are unguessable and links apply themselves", () => {
 const shopify = {
   storeDomain: "example.myshopify.com",
   adminToken: "shpat_test",
+  clientId: "",
+  clientSecret: "",
   apiVersion: "2026-10",
   siteUrl: "https://rivoxlabs.com",
   tinProductIds: ["11", "22"],
