@@ -34,18 +34,66 @@ export function checkedIn(e: DayEntry | undefined): boolean {
   return Boolean(e && (e.caps || (e.pouches ?? 0) > 0));
 }
 
+const nextDay = (key: string) => addDays(key, 1);
+
+/** How many check-ins earn one streak save, and how many can be held at once. */
+export const SAVE_EVERY = 14;
+export const SAVE_MAX = 2;
+
+export interface StreakState {
+  /** Checked-in days in the current unbroken run. A saved day keeps the run alive but doesn't add to it. */
+  streak: number;
+  /** The longest run ever. */
+  best: number;
+  /** Streak saves in hand. */
+  saves: number;
+  /** Missed days a save covered. */
+  saved: string[];
+}
+
 /**
- * Consecutive checked-in days ending today. If today isn't done yet, the run
- * ending yesterday still stands, so the streak doesn't read 0 every morning.
+ * Walks every day from the first check-in to `today` and works out the streak.
+ * A missed day costs a save if one is in hand, otherwise it ends the run.
+ * Today not being done yet is not a miss. The result depends only on which days
+ * were checked in, so the phone and the server always agree.
  */
-export function streak(log: DayLog, today: string): number {
-  let cursor = checkedIn(log[today]) ? today : addDays(today, -1);
-  let n = 0;
-  while (checkedIn(log[cursor])) {
-    n += 1;
-    cursor = addDays(cursor, -1);
+export function streakState(checkedDays: Iterable<string>, today: string): StreakState {
+  const set = new Set(checkedDays);
+  const first = [...set].sort()[0];
+  const state: StreakState = { streak: 0, best: 0, saves: 0, saved: [] };
+  if (!first || first > today) return state;
+  let sinceSave = 0;
+  for (let day = first; day <= today; day = nextDay(day)) {
+    if (set.has(day)) {
+      state.streak += 1;
+      if (state.streak > state.best) state.best = state.streak;
+      sinceSave += 1;
+      if (sinceSave >= SAVE_EVERY && state.saves < SAVE_MAX) {
+        state.saves += 1;
+        sinceSave = 0;
+      }
+    } else if (day === today) {
+      // Still time to check in.
+    } else if (state.streak > 0 && state.saves > 0) {
+      state.saves -= 1;
+      state.saved.push(day);
+    } else {
+      state.streak = 0;
+    }
   }
-  return n;
+  return state;
+}
+
+const checkedDays = (log: DayLog) => Object.keys(log).filter((k) => checkedIn(log[k]));
+
+/** The current streak, with streak saves applied. */
+export function streak(log: DayLog, today: string): number {
+  return streakState(checkedDays(log), today).streak;
+}
+
+/** Streak, best run, saves in hand and saved days, straight from the day log. */
+export function streakInfo(log: DayLog, today: string): StreakState {
+  return streakState(checkedDays(log), today);
 }
 
 export const BADGES = [7, 14, 30, 60, 90, 180, 365] as const;
@@ -117,20 +165,18 @@ export function tagLink(url: string): string {
   return `${base}${sep}utm_source=rivox_app&utm_medium=app&utm_campaign=drops${hash ? `#${hash}` : ""}`;
 }
 
-/** The longest run of checked-in days anywhere in the log. Badges are earned on this, so a missed day never takes one back. */
-export function bestStreak(log: DayLog): number {
-  const days = Object.keys(log)
-    .filter((k) => checkedIn(log[k]))
-    .sort();
-  let best = 0;
-  let run = 0;
-  let prev: string | null = null;
-  for (const d of days) {
-    run = prev !== null && daysBetween(prev, d) === 1 ? run + 1 : 1;
-    if (run > best) best = run;
-    prev = d;
-  }
-  return best;
+/** The longest run ever, with streak saves applied. Badges are earned on this, so a missed day never takes one back. */
+export function bestStreak(log: DayLog, today: string): number {
+  return streakState(checkedDays(log), today).best;
+}
+
+/** What to say about streak saves. Null when there's nothing worth saying. */
+export function savesLine(state: StreakState, today: string): string | null {
+  const yesterday = addDays(today, -1);
+  const left = state.saves === 1 ? "1 save left." : `${state.saves} saves left.`;
+  if (state.saved.includes(yesterday) && state.streak > 0) return `You missed yesterday. A save covered it. ${left}`;
+  if (state.saves > 0) return state.saves === 1 ? "1 streak save banked." : `${state.saves} streak saves banked.`;
+  return null;
 }
 
 /** The badge they hit today, if today's check-in is the one that got them there. */

@@ -35,22 +35,58 @@ export const DEFAULT_RULES: PointsRules = {
   ],
 };
 
-function prevDay(day: string): string {
+function nextDay(day: string): string {
   const d = new Date(`${day}T12:00:00Z`);
-  d.setUTCDate(d.getUTCDate() - 1);
+  d.setUTCDate(d.getUTCDate() + 1);
   return d.toISOString().slice(0, 10);
 }
 
-/** Consecutive checked-in days ending on `day`. Zero if `day` itself isn't checked in. */
-export function streakEnding(days: Iterable<string>, day: string): number {
-  const set = new Set(days);
-  let n = 0;
-  let cursor = day;
-  while (set.has(cursor)) {
-    n += 1;
-    cursor = prevDay(cursor);
+/** How many check-ins earn one streak save, and how many can be held at once. */
+export const SAVE_EVERY = 14;
+export const SAVE_MAX = 2;
+
+export interface StreakState {
+  /** Checked-in days in the current unbroken run. A saved day keeps the run alive but doesn't add to it. */
+  streak: number;
+  /** The longest run ever. */
+  best: number;
+  /** Streak saves in hand. */
+  saves: number;
+  /** Missed days a save covered. */
+  saved: string[];
+}
+
+/**
+ * Walks every day from the first check-in to `today` and works out the streak.
+ * A missed day costs a save if one is in hand, otherwise it ends the run.
+ * Today not being done yet is not a miss. The result depends only on which days
+ * were checked in, so the phone and the server always agree.
+ */
+export function streakState(checkedDays: Iterable<string>, today: string): StreakState {
+  const set = new Set(checkedDays);
+  const first = [...set].sort()[0];
+  const state: StreakState = { streak: 0, best: 0, saves: 0, saved: [] };
+  if (!first || first > today) return state;
+  let sinceSave = 0;
+  for (let day = first; day <= today; day = nextDay(day)) {
+    if (set.has(day)) {
+      state.streak += 1;
+      if (state.streak > state.best) state.best = state.streak;
+      sinceSave += 1;
+      if (sinceSave >= SAVE_EVERY && state.saves < SAVE_MAX) {
+        state.saves += 1;
+        sinceSave = 0;
+      }
+    } else if (day === today) {
+      // Still time to check in.
+    } else if (state.streak > 0 && state.saves > 0) {
+      state.saves -= 1;
+      state.saved.push(day);
+    } else {
+      state.streak = 0;
+    }
   }
-  return n;
+  return state;
 }
 
 /** Streak bonuses this streak qualifies for, as [length, points], smallest first. */

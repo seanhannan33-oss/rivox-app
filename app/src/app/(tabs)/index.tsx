@@ -30,7 +30,7 @@ const MG_PER_POUCH = 60;
 export default function Today() {
   const s = useS();
   const { email, access, signOut, deleteAccount } = useSession();
-  const { ready, entry, streak, best, earnedToday, crowd, today, firstDay, update } = useDayLog();
+  const { ready, entry, streak, best, earnedToday, savesNote, crowd, today, firstDay, update } = useDayLog();
   const products = access?.products ?? [];
   const hasNoCurfew = products.includes("no_curfew");
   const hasPouches = products.includes("pouches");
@@ -93,6 +93,7 @@ export default function Today() {
         </View>
         <Body>{dayLine(day)}</Body>
         <Text style={s.streak}>{streakLine}</Text>
+        {savesNote ? <Text style={s.crowd}>{savesNote}</Text> : null}
         {crowdText ? <Text style={s.crowd}>{crowdText}</Text> : null}
 
         {earnedToday ? (

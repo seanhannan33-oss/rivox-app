@@ -2,7 +2,7 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useState, t
 import { AppState } from "react-native";
 import { useSession } from "../session";
 import { putCheckin } from "../api";
-import { badgeEarnedToday, bestStreak, checkedIn, dateKey, prune, streak, type DayEntry } from "./days";
+import { badgeEarnedToday, checkedIn, dateKey, prune, savesLine, streakInfo, type DayEntry } from "./days";
 import { mergeDays, readDays, type DaysDoc } from "./sync";
 import { useSyncedDoc } from "./useSyncedDoc";
 
@@ -20,6 +20,10 @@ interface DayLogValue {
   best: number;
   /** The badge today's check-in earned, if it did. */
   earnedToday: number | null;
+  /** Streak saves in hand. */
+  saves: number;
+  /** A line about saves, when there's something to say. */
+  savesNote: string | null;
   /** Members who've checked in today, this one included. Null until the server answers. */
   crowd: number | null;
   /** Their points balance, from the server. Null until it answers. */
@@ -88,20 +92,27 @@ export function DayLogProvider({ children }: { children: ReactNode }) {
     };
   }, [token, today, done]);
 
+  const info = useMemo(
+    () => (doc ? streakInfo(doc.log, today) : { streak: 0, best: 0, saves: 0, saved: [] }),
+    [doc, today],
+  );
+
   const value = useMemo<DayLogValue>(
     () => ({
       ready,
       today,
       firstDay: doc?.firstDay ?? today,
       entry: doc?.log[today] ?? {},
-      streak: doc ? streak(doc.log, today) : 0,
-      best: doc ? bestStreak(doc.log) : 0,
+      streak: info.streak,
+      best: info.best,
+      saves: info.saves,
+      savesNote: savesLine(info, today),
       earnedToday: doc ? badgeEarnedToday(doc.log, today) : null,
       crowd,
       points,
       update,
     }),
-    [ready, today, doc, crowd, points, update],
+    [ready, today, doc, info, crowd, points, update],
   );
 
   return <DayLogContext.Provider value={value}>{children}</DayLogContext.Provider>;

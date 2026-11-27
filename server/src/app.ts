@@ -17,7 +17,7 @@ import type { EmailSender } from "./email.ts";
 import type { LoopClient } from "./loop.ts";
 import { createSession, readSession } from "./session.ts";
 import { WindowLimiter, clientIp, forwardedCount } from "./limits.ts";
-import { bonusesFor, streakEnding } from "./points.ts";
+import { bonusesFor, streakState } from "./points.ts";
 import { inAudience, isPushToken, parsePush, type PushSender } from "./push.ts";
 import type { RewardIssuer } from "./rewards.ts";
 import type { Store } from "./store.ts";
@@ -209,7 +209,7 @@ export function createApp(deps: Deps) {
     let earned = 0;
     if (body.done) {
       if (await store.addPoints(address, "checkin", body.day, rules.perCheckin, now())) earned += rules.perCheckin;
-      const streak = streakEnding(await store.listCheckinDays(address, 400), body.day);
+      const { streak } = streakState(await store.listCheckinDays(address, 400), body.day);
       for (const [length, bonus] of bonusesFor(streak, rules)) {
         if (await store.addPoints(address, "streak", String(length), bonus, now())) earned += bonus;
       }
