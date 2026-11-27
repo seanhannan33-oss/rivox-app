@@ -52,7 +52,13 @@ if (shopifyReady(config.shopify)) {
   shop = new ShopifyShop(config.shopify);
   console.log(`Rewards and shop: on (${config.shopify.storeDomain}).`);
 } else {
-  console.warn("Rewards and shop: off. Points still add up. Set SHOPIFY_STORE_DOMAIN, SHOPIFY_CLIENT_ID and SHOPIFY_CLIENT_SECRET to switch them on.");
+  const missing = [
+    ["SHOPIFY_STORE_DOMAIN", config.shopify.storeDomain],
+    ["SHOPIFY_CLIENT_ID", config.shopify.clientId],
+    ["SHOPIFY_CLIENT_SECRET", config.shopify.clientSecret],
+  ].filter(([, value]) => !value).map(([name]) => name);
+  // Names only, never values.
+  console.warn(`Rewards and shop: off. Points still add up. Missing or empty: ${missing.join(", ")}.`);
 }
 
 const app = createApp({ config, store, loop: new HttpLoopClient(config.loop), email, meals, push: new ExpoPushSender(config.expoAccessToken), rewards, shop });
