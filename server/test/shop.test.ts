@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { ShopifyShop, shortTitle, toOrders, toProducts } from "../src/shop.ts";
+import { groupOf, ShopifyShop, shortTitle, toOrders, toProducts } from "../src/shop.ts";
 
 test("shortTitle strips the search-engine padding", () => {
   assert.equal(shortTitle("Rivox Focus Pouches – Cool Mint | Zero-Nicotine Energy + Focus, Caffeine + L-Theanine"), "Focus Pouches – Cool Mint");
@@ -33,8 +33,8 @@ test("products: only what a member can buy one-off, cleaned up", () => {
     ["4"],
   );
   assert.deepEqual(out, [
-    { id: "1", title: "Focus Pouches – Cool Mint", image: "https://cdn.shopify.com/x.png", url: "https://rivoxlabs.com/products/cool-mint", variants: [{ id: "11", title: "", price: "7.99", available: true }] },
-    { id: "6", title: "Focus Pouches – Cool Mint", image: null, url: "https://rivoxlabs.com/products/cool-mint", variants: [{ id: "61", title: "Pack 1", price: "34.99", available: false }] },
+    { id: "1", title: "Focus Pouches – Cool Mint", image: "https://cdn.shopify.com/x.png", url: "https://rivoxlabs.com/products/cool-mint", group: "Focus Pouches", variants: [{ id: "11", title: "", price: "7.99", available: true }] },
+    { id: "6", title: "Focus Pouches – Cool Mint", image: null, url: "https://rivoxlabs.com/products/cool-mint", group: "Focus Pouches", variants: [{ id: "61", title: "Pack 1", price: "34.99", available: false }] },
   ]);
 });
 
@@ -97,4 +97,29 @@ test("ShopifyShop caches products briefly and looks orders up by the exact email
   const orders = await shop.orders('dan"@example.com OR email:*');
   assert.equal(orders[0]!.name, "#1467");
   assert.equal(calls[2]!.variables.q, 'email:"dan@example.com OR email:*"'); // quotes stripped, the rest stays inside the quotes
+});
+
+test("the shelf is sorted into sections, cheapest first inside each", () => {
+  assert.equal(groupOf("No Curfew Testosterone Support - 3 Month Supply", "Testosterone Support"), "No Curfew");
+  assert.equal(groupOf("Rivox Focus Pouches – Cool Mint 5-Pack", "Focus Pouches"), "Focus Pouches");
+  assert.equal(groupOf("Rivox Focus Gum – 3 Pack", "Energy Gum"), "Energy Gum");
+  assert.equal(groupOf("The Full Stack – Zero-Nicotine Focus Bundle | 3 Pouch Tins + Energy Gum", "Focus Pouches"), "Kits + Bundles");
+  assert.equal(groupOf("Rivox Pouch Starter Kit", ""), "Kits + Bundles");
+  assert.equal(groupOf("Rivox Labs Premium Weatherproof Aluminum Pouch Case", "Aluminum Cans"), "Gear");
+  assert.equal(groupOf("The Modern Testosterone Handbook", ""), "Reads");
+  assert.equal(shortTitle("No Curfew Testosterone Support - 2 Month Supply"), "No Curfew – 2 Month Supply");
+  assert.equal(shortTitle("Rivox Focus Pouches –  Tropical Mango  5-Pack"), "Focus Pouches – Tropical Mango 5-Pack");
+  assert.equal(shortTitle("Build Your Five-Pack at $34.99"), "Build Your Five-Pack");
+
+  const v = (price: string) => ({ nodes: [{ legacyResourceId: "v" + price, title: "Default Title", price, availableForSale: true }] });
+  const out = toProducts(
+    [
+      raw({ legacyResourceId: "a", title: "The Modern Focus Playbook", variants: v("9.99") }),
+      raw({ legacyResourceId: "b", title: "Rivox Focus Pouches – Cool Mint 5-Pack", variants: v("34.99") }),
+      raw({ legacyResourceId: "c", title: "No Curfew Testosterone Support", variants: v("59.00") }),
+      raw({ legacyResourceId: "d", title: "Rivox Focus Pouches – Cool Mint", variants: v("7.99") }),
+    ] as any,
+    [],
+  );
+  assert.deepEqual(out.map((p) => p.id), ["c", "d", "b", "a"]);
 });

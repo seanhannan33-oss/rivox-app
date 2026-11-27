@@ -31,6 +31,8 @@ export function Shelf({ shop, reloadKey }: { shop: CartApi; reloadKey: number })
   const [closed, setClosed] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [savedOnly, setSavedOnly] = useState(false);
+  // Which flavor or color is picked on products that come in more than one.
+  const [picked, setPicked] = useState<Record<string, string>>({});
 
   const load = useCallback(async () => {
     if (!token) return;
@@ -64,6 +66,14 @@ export function Shelf({ shop, reloadKey }: { shop: CartApi; reloadKey: number })
   }
 
   const list = (products ?? []).filter((p) => !savedOnly || shop.favs.includes(p.id));
+  // The server sends products already in section order: start a new section each time the name changes.
+  const sections: { name: string; items: ShopProduct[] }[] = [];
+  for (const p of list) {
+    const name = p.group ?? "";
+    const last = sections[sections.length - 1];
+    if (last && last.name === name) last.items.push(p);
+    else sections.push({ name, items: [p] });
+  }
 
   return (
     <View style={s.wrap}>
@@ -93,9 +103,14 @@ export function Shelf({ shop, reloadKey }: { shop: CartApi; reloadKey: number })
       ) : list.length === 0 ? (
         <Body style={s.gapTop}>{savedOnly ? "Nothing saved yet." : "Nothing on the shelf right now."}</Body>
       ) : (
-        <View style={s.grid}>
-          {list.map((p) => {
-            const v = p.variants.find((x) => x.available) ?? p.variants[0]!;
+        sections.map((section) => (
+          <View key={section.name || "all"}>
+            {section.name ? <Text style={s.section}>{section.name.toUpperCase()}</Text> : null}
+            <View style={s.grid}>
+              {section.items.map((p) => {
+            const v =
+              p.variants.find((x) => x.id === picked[p.id]) ?? p.variants.find((x) => x.available) ?? p.variants[0]!;
+            const itemTitle = v.title ? `${p.title} (${v.title})` : p.title;
             const inCart = shop.cart.find((l) => l.variantId === v.id)?.qty ?? 0;
             const saved = shop.favs.includes(p.id);
             return (
@@ -110,6 +125,25 @@ export function Shelf({ shop, reloadKey }: { shop: CartApi; reloadKey: number })
                     {p.title}
                   </Text>
                 </Pressable>
+                {p.variants.length > 1 ? (
+                  <View style={s.chips}>
+                    {p.variants.map((x) => (
+                      <Pressable
+                        key={x.id}
+                        onPress={() => setPicked((cur) => ({ ...cur, [p.id]: x.id }))}
+                        accessibilityRole="button"
+                        accessibilityState={{ selected: x.id === v.id }}
+                        accessibilityLabel={`${p.title}, ${x.title}`}
+                        hitSlop={4}
+                        style={[s.chip, x.id === v.id && s.chipOn]}
+                      >
+                        <Text style={[s.chipText, x.id === v.id && s.chipTextOn]} numberOfLines={1}>
+                          {x.title}
+                        </Text>
+                      </Pressable>
+                    ))}
+                  </View>
+                ) : null}
                 <View style={s.priceRow}>
                   <Text style={s.price}>${v.price}</Text>
                   <Pressable
@@ -132,9 +166,9 @@ export function Shelf({ shop, reloadKey }: { shop: CartApi; reloadKey: number })
                   </View>
                 ) : (
                   <Pressable
-                    onPress={() => shop.add({ variantId: v.id, title: p.title, price: Number(v.price) })}
+                    onPress={() => shop.add({ variantId: v.id, title: itemTitle, price: Number(v.price) })}
                     accessibilityRole="button"
-                    accessibilityLabel={`Add ${p.title} to cart`}
+                    accessibilityLabel={`Add ${itemTitle} to cart`}
                     style={({ pressed }) => [s.add, pressed && s.pressed]}
                   >
                     <Text style={s.addText}>ADD</Text>
@@ -143,7 +177,9 @@ export function Shelf({ shop, reloadKey }: { shop: CartApi; reloadKey: number })
               </View>
             );
           })}
-        </View>
+            </View>
+          </View>
+        ))
       )}
       <Text style={s.fine}>One-time orders. To subscribe and save, tap a product.</Text>
     </View>
@@ -201,7 +237,13 @@ const useS = themed((colors) =>
     headLinks: { flexDirection: "row", gap: 16 },
     link: { fontFamily: fonts.bold, color: colors.accent, fontSize: 13 },
     gapTop: { marginTop: 12 },
-    grid: { flexDirection: "row", flexWrap: "wrap", justifyContent: "space-between", marginTop: 12 },
+    grid: { flexDirection: "row", flexWrap: "wrap", justifyContent: "space-between", marginTop: 10 },
+    section: { fontFamily: fonts.headline, color: colors.text, fontSize: 20, letterSpacing: 0.5, marginTop: 18 },
+    chips: { flexDirection: "row", flexWrap: "wrap", gap: 6, marginTop: 6 },
+    chip: { borderWidth: 1, borderColor: colors.border, borderRadius: radius.sm, paddingHorizontal: 8, paddingVertical: 6 },
+    chipOn: { borderColor: colors.accent },
+    chipText: { fontFamily: fonts.medium, color: colors.secondary, fontSize: 11 },
+    chipTextOn: { color: colors.text },
     card: {
       width: "48.5%",
       backgroundColor: colors.panel,

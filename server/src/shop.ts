@@ -15,7 +15,23 @@ export interface ShopProduct {
   image: string | null;
   /** The product's page on the store. */
   url: string;
+  /** Which shelf section it sits in. Sections arrive in display order. */
+  group: ShopGroup;
   variants: ShopVariant[];
+}
+
+export const SHOP_GROUPS = ["No Curfew", "Focus Pouches", "Energy Gum", "Kits + Bundles", "Gear", "Reads"] as const;
+export type ShopGroup = (typeof SHOP_GROUPS)[number];
+
+/** Sorts a product into its shelf section from its name and Shopify product type. */
+export function groupOf(title: string, productType: string): ShopGroup {
+  const t = title.toLowerCase();
+  if (t.includes("no curfew")) return "No Curfew";
+  if (/handbook|playbook/.test(t)) return "Reads";
+  if (/\bcase\b/.test(t) || /aluminum/i.test(productType)) return "Gear";
+  if (/\bkit\b|full stack|bundle|build your|7-day/.test(t)) return "Kits + Bundles";
+  if (/\bgum\b/.test(t)) return "Energy Gum";
+  return "Focus Pouches";
 }
 
 export interface ShopOrder {
@@ -37,14 +53,19 @@ export interface Shop {
 
 /** "Rivox Focus Pouches – Cool Mint | Zero-Nicotine Energy + Focus" -> "Focus Pouches – Cool Mint" */
 export function shortTitle(title: string): string {
-  const cut = title.split(" | ")[0]!.split(",")[0]!.trim();
-  return cut.replace(/^Rivox\s+(Labs\s+)?/i, "").trim() || title;
+  const cut = title.split(" | ")[0]!.split(",")[0]!.replace(/\s+/g, " ").trim();
+  const short = cut
+    .replace(/^Rivox\s+(Labs\s+)?/i, "")
+    .replace(/^No Curfew Testosterone Support\s*[-–]\s*/i, "No Curfew – ")
+    .replace(/\s+at \$[\d.]+$/i, "")
+    .trim();
+  return short || title;
 }
 
 const PRODUCTS = `query($q: String!) {
   products(first: 50, query: $q, sortKey: TITLE) {
     nodes {
-      legacyResourceId title requiresSellingPlan onlineStoreUrl
+      legacyResourceId title productType requiresSellingPlan onlineStoreUrl
       featuredMedia { preview { image { url } } }
       variants(first: 10) { nodes { legacyResourceId title price availableForSale } }
     }
@@ -65,6 +86,7 @@ const ORDERS = `query($q: String!) {
 interface RawProduct {
   legacyResourceId: string;
   title: string;
+  productType?: string | null;
   requiresSellingPlan: boolean;
   onlineStoreUrl: string | null;
   featuredMedia: { preview: { image: { url: string } | null } | null } | null;
@@ -80,6 +102,7 @@ export function toProducts(raw: RawProduct[], hidden: string[]): ShopProduct[] {
       title: shortTitle(p.title),
       image: p.featuredMedia?.preview?.image?.url ?? null,
       url: p.onlineStoreUrl!,
+      group: groupOf(p.title, p.productType ?? ""),
       variants: p.variants.nodes
         .filter((v) => Number(v.price) > 0) // free items aren't for sale
         .map((v) => ({
@@ -89,7 +112,14 @@ export function toProducts(raw: RawProduct[], hidden: string[]): ShopProduct[] {
           available: v.availableForSale,
         })),
     }))
-    .filter((p) => p.variants.length > 0);
+    .filter((p) => p.variants.length > 0)
+    // Section by section, cheapest first inside each, so a single tin sits ahead of its multi-packs.
+    .sort(
+      (a, b) =>
+        SHOP_GROUPS.indexOf(a.group) - SHOP_GROUPS.indexOf(b.group) ||
+        Number(a.variants[0]!.price) - Number(b.variants[0]!.price) ||
+        a.title.localeCompare(b.title),
+    );
 }
 
 interface RawOrder {

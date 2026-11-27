@@ -148,6 +148,8 @@ export interface ShopProduct {
   title: string;
   image: string | null;
   url: string;
+  /** Shelf section. Older servers don't send it. */
+  group?: string;
   variants: ShopVariant[];
 }
 export interface ShopOrder {

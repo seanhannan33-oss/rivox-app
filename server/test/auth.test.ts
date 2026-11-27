@@ -800,7 +800,7 @@ test("deleting the account wipes points and claimed rewards", async () => {
 test("the shop shows products and only the member's own orders", async () => {
   const asked: string[] = [];
   const shop: Shop = {
-    products: async () => [{ id: "1", title: "Cool Mint", image: null, url: "https://rivoxlabs.com/products/x", variants: [{ id: "11", title: "", price: "7.99", available: true }] }],
+    products: async () => [{ id: "1", title: "Cool Mint", image: null, url: "https://rivoxlabs.com/products/x", group: "Focus Pouches", variants: [{ id: "11", title: "", price: "7.99", available: true }] }],
     orders: async (email) => {
       asked.push(email);
       return [{ name: "#1001", placedAt: 1, status: "shipped", total: "20.37", items: [], tracking: null, statusUrl: null }];
