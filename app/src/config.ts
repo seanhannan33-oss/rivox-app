@@ -1,5 +1,5 @@
 // EXPO_PUBLIC_ values are baked into the app at build time. Never put secrets here.
-export const API_URL = (process.env.EXPO_PUBLIC_API_URL ?? "http://localhost:8787").replace(/\/+$/, "");
+export const API_URL = (process.env.EXPO_PUBLIC_API_URL ?? "https://rivox-app.onrender.com").replace(/\/+$/, "");
 
 // Buy buttons go to the two sales pages, tagged so app orders show up on their own.
 const TAG = "utm_source=rivox_app&utm_medium=app&utm_campaign=locked_screen";
