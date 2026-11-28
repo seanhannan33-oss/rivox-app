@@ -105,7 +105,12 @@ export function Shelf({ shop, reloadKey }: { shop: CartApi; reloadKey: number })
       ) : (
         sections.map((section) => (
           <View key={section.name || "all"}>
-            {section.name ? <Text style={s.section}>{section.name.toUpperCase()}</Text> : null}
+            {section.name ? (
+              <View style={s.sectionRow} accessibilityRole="header">
+                <Text style={s.section}>{section.name.toUpperCase()}</Text>
+                <View style={s.rule} />
+              </View>
+            ) : null}
             <View style={s.grid}>
               {section.items.map((p) => {
             const v =
@@ -238,7 +243,9 @@ const useS = themed((colors) =>
     link: { fontFamily: fonts.bold, color: colors.accent, fontSize: 13 },
     gapTop: { marginTop: 12 },
     grid: { flexDirection: "row", flexWrap: "wrap", justifyContent: "space-between", marginTop: 10 },
-    section: { fontFamily: fonts.headline, color: colors.text, fontSize: 20, letterSpacing: 0.5, marginTop: 18 },
+    sectionRow: { flexDirection: "row", alignItems: "center", gap: 12, marginTop: 22 },
+    section: { fontFamily: fonts.headline, color: colors.text, fontSize: 20, letterSpacing: 0.5 },
+    rule: { flex: 1, height: 2, backgroundColor: colors.yellow },
     chips: { flexDirection: "row", flexWrap: "wrap", gap: 6, marginTop: 6 },
     chip: { borderWidth: 1, borderColor: colors.border, borderRadius: radius.sm, paddingHorizontal: 8, paddingVertical: 6 },
     chipOn: { borderColor: colors.accent },
