@@ -99,7 +99,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
 /**
  * Kept off the in-app shelf unless SHOP_HIDE_PRODUCT_IDS says otherwise: both
  * handbooks, the 7-Day Test, Build Your Five-Pack, the No Curfew 2 and 3 month
- * supplies, the gum 3-pack, the pouch 3-pack and 12-pack, and The Full Stack.
+ * supplies, the gum 3-pack, the pouch 3-pack and 12-pack, The Full Stack, and the three single tins (still redeemable as the free-tin reward).
  */
 export const DEFAULT_HIDDEN_PRODUCT_IDS = [
   "8390656163906",
@@ -112,4 +112,7 @@ export const DEFAULT_HIDDEN_PRODUCT_IDS = [
   "8281569919042",
   "8356912857154",
   "8295987281986",
+  "7707867578434",
+  "7707867938882",
+  "7707868463170",
 ];
